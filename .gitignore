@@ -9,3 +9,7 @@ dist/
 .DS_Store
 Thumbs.db
 .vscode/
+backend/uploads/
+backend/*.db
+ml_service/venv/
+backend/venv/
