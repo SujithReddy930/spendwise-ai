@@ -1,25 +1,26 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.routes.expenses import router as expense_router
 from app.database import Base, engine
-from app.routes import auth, expenses
-from app.routes import ocr
-from fastapi.staticfiles import StaticFiles
+from app.routes import auth, expenses, ocr
 from app.models.receipt import Receipt
-
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SpendWise AI", version="1.0")
-app.mount(
-    "/uploads",
-    StaticFiles(directory="uploads"),
-    name="uploads",
-)   
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        FRONTEND_URL,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
