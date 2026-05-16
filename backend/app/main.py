@@ -11,6 +11,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SpendWise AI", version="1.0")
 
+os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
