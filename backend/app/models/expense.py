@@ -13,4 +13,4 @@ class Expense(Base):
     date = Column(DateTime, default=datetime.utcnow)
     note = Column(String, default="")
     is_recurring = Column(Boolean, default=False)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
