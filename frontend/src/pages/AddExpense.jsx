@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext'
 
 const CATEGORIES = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Bills', 'Health', 'Education', 'Other']
 const PAYMENT_METHODS = ['UPI', 'Cash', 'Credit Card', 'Debit Card', 'Net Banking']
+const ML_URL = import.meta.env.VITE_ML_URL || 'http://localhost:8001'
 
 export default function AddExpense() {
   const navigate = useNavigate()
@@ -36,8 +37,9 @@ export default function AddExpense() {
     if (value.length > 3) {
       setAiLoading(true)
       try {
-        const res = await fetch('http://localhost:8001/ai/categorize', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const res = await fetch(`${ML_URL}/ai/categorize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: value })
         })
         const data = await res.json()
@@ -45,17 +47,22 @@ export default function AddExpense() {
           setForm(prev => ({ ...prev, title: value, category: data.category }))
           setAiCategory(`${data.category} · ${data.confidence}% confident`)
         }
-      } catch (e) {} finally { setAiLoading(false) }
+      } catch (e) {
+      } finally {
+        setAiLoading(false)
+      }
     }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
-      await api.post('/expenses', { ...form, amount: parseFloat(form.amount) })
+      await api.post('/expenses/', { ...form, amount: parseFloat(form.amount) })
       setMessage('success')
       setTimeout(() => navigate('/dashboard'), 1200)
-    } catch (err) { setMessage('error') }
+    } catch (err) {
+      setMessage('error')
+    }
   }
 
   return (
@@ -157,7 +164,7 @@ export default function AddExpense() {
               />
             </div>
 
-            {/* 🔄 Recurring toggle */}
+            {/* Recurring toggle */}
             <div
               onClick={() => setForm(prev => ({ ...prev, is_recurring: !prev.is_recurring }))}
               className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
