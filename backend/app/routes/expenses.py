@@ -15,7 +15,7 @@ from app.models.expense import Expense
 from app.schemas.expense import ExpenseCreate
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
-AI_SERVICE_URL = "http://localhost:8001"
+AI_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 
 # ── Email config (set these in a .env file) ──────────────────
 SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")        # your Gmail address
