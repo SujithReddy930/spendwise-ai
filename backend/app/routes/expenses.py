@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import extract
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import date, datetime
@@ -17,9 +16,8 @@ from app.schemas.expense import ExpenseCreate
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 AI_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 
-# ── Email config (set these in a .env file) ──────────────────
-SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")        # your Gmail address
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")  # Gmail App Password
+SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 def get_db():
     db = SessionLocal()
@@ -36,6 +34,10 @@ def create_expense(data: ExpenseCreate, db: Session = Depends(get_db)):
         title=data.title,
         amount=data.amount,
         category=data.category,
+        payment_method=data.payment_method,
+        date=datetime.combine(data.date, datetime.min.time()) if data.date else datetime.utcnow(),
+        note=data.note,
+        is_recurring=data.is_recurring,
         user_id=1,
     )
     db.add(expense)
@@ -92,7 +94,7 @@ def get_insights(month: int, year: int, db: Session = Depends(get_db)):
             })
             return res.json()
     except Exception:
-        return {"insights": ["AI service unavailable. Start the ML service on port 8001."]}
+        return {"insights": ["AI service unavailable."]}
 
 # ── AI Prediction ────────────────────────────────────
 
@@ -136,7 +138,6 @@ def send_report(req: EmailReportRequest, db: Session = Depends(get_db)):
     now = datetime.now()
     month_name = now.strftime("%B %Y")
 
-    # Build email HTML
     rows = "".join(
         f"<tr><td style='padding:8px;border-bottom:1px solid #eee'>{e.title}</td>"
         f"<td style='padding:8px;border-bottom:1px solid #eee'>{e.category}</td>"
@@ -158,12 +159,10 @@ def send_report(req: EmailReportRequest, db: Session = Depends(get_db)):
       <div style="background:#f9fafb;padding:24px;border-radius:0 0 12px 12px">
         <h2 style="margin:0 0 4px;font-size:28px;color:#111">₹{total:,.0f}</h2>
         <p style="color:#6b7280;margin:0 0 20px">Total spent · {len(expenses)} transactions</p>
-
         <h3 style="font-size:14px;color:#374151;margin-bottom:8px">By Category</h3>
         <table width="100%" style="border-collapse:collapse;margin-bottom:20px;background:white;border-radius:8px">
           {cat_rows}
         </table>
-
         <h3 style="font-size:14px;color:#374151;margin-bottom:8px">Recent Transactions</h3>
         <table width="100%" style="border-collapse:collapse;background:white;border-radius:8px">
           <tr style="background:#10b981;color:white">
@@ -173,7 +172,6 @@ def send_report(req: EmailReportRequest, db: Session = Depends(get_db)):
           </tr>
           {rows}
         </table>
-
         <p style="color:#9ca3af;font-size:12px;margin-top:20px;text-align:center">
           Sent by SpendWise AI · Your personal finance tracker
         </p>
