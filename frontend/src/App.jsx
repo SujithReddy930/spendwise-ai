@@ -10,6 +10,8 @@ import OCRScanner from './pages/OCRScanner'
 import ReceiptHistory from './pages/ReceiptHistory'
 import Profile from './pages/Profile'
 import PrivateRoute from './components/PrivateRoute'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
             <Route path="/ocr" element={<PrivateRoute><OCRScanner /></PrivateRoute>} />
             <Route path="/history" element={<PrivateRoute><ReceiptHistory /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
