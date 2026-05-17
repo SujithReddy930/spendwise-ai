@@ -2,22 +2,34 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import date, datetime
+from datetime import datetime
 import httpx
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.models.expense import Expense
 from app.schemas.expense import ExpenseCreate
+from sqlalchemy import text
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 AI_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 
 SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+
+# ── Run migrations on startup ────────────────────────
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method VARCHAR DEFAULT 'UPI'"))
+        conn.execute(text("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note VARCHAR DEFAULT ''"))
+        conn.execute(text("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE"))
+        conn.execute(text("ALTER TABLE expenses ALTER COLUMN user_id DROP NOT NULL"))
+        conn.commit()
+except Exception as e:
+    print(f"Migration note: {e}")
 
 def get_db():
     db = SessionLocal()
@@ -30,15 +42,22 @@ def get_db():
 
 @router.post("/")
 def create_expense(data: ExpenseCreate, db: Session = Depends(get_db)):
+    expense_date = datetime.utcnow()
+    if data.date:
+        try:
+            expense_date = datetime.strptime(data.date, "%Y-%m-%d")
+        except Exception:
+            expense_date = datetime.utcnow()
+
     expense = Expense(
         title=data.title,
         amount=data.amount,
         category=data.category,
         payment_method=data.payment_method,
-        date=datetime.combine(data.date, datetime.min.time()) if data.date else datetime.utcnow(),
+        date=expense_date,
         note=data.note,
         is_recurring=data.is_recurring,
-        user_id=1,
+        user_id=None,
     )
     db.add(expense)
     db.commit()
