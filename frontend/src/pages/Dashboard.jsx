@@ -31,7 +31,6 @@ export default function Dashboard() {
   const year = now.getFullYear()
   const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' })
 
-  // Theme classes
   const bg = dark ? 'bg-[#111111]' : 'bg-gray-50'
   const card = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
   const topbar = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
@@ -42,11 +41,13 @@ export default function Dashboard() {
     ? { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }
     : { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }
 
-  useEffect(() => { fetchExpenses(); fetchAI() }, [])
-  useEffect(() => { localStorage.setItem('budget', budget) }, [budget])
-
   const fetchExpenses = async () => {
-    try { const res = await api.get('/expenses'); setExpenses(res.data) } catch (err) { console.log(err) }
+    try {
+      const res = await api.get('/expenses/')
+      setExpenses(res.data)
+    } catch (err) {
+      console.log(err)
+    }
   }
 
   const fetchAI = async () => {
@@ -57,12 +58,30 @@ export default function Dashboard() {
       ])
       setInsights(insRes.data.insights || [])
       setPrediction(predRes.data)
-    } catch (e) { console.log('AI not available') }
+    } catch (e) {
+      console.log('AI not available')
+    }
   }
+
+  useEffect(() => {
+    fetchExpenses()
+    fetchAI()
+    window.addEventListener('focus', fetchExpenses)
+    return () => window.removeEventListener('focus', fetchExpenses)
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('budget', budget)
+  }, [budget])
 
   const deleteExpense = async (id) => {
     if (!confirm('Delete this expense?')) return
-    try { await api.delete(`/expenses/${id}`); fetchExpenses() } catch (err) { console.log(err) }
+    try {
+      await api.delete(`/expenses/${id}`)
+      fetchExpenses()
+    } catch (err) {
+      console.log(err)
+    }
   }
 
   const exportPDF = () => {
@@ -107,8 +126,6 @@ export default function Dashboard() {
   const lineData = Object.entries(byDate).sort((a, b) => Number(a[0]) - Number(b[0])).map(([day, total]) => ({ day, total }))
 
   const categoryBudgets = { Food: 8000, Transport: 5000, Shopping: 6000, Bills: 5000, Other: 6000 }
-
-  // Alert level
   const alertLevel = spendingPct >= 100 ? 'over' : spendingPct >= 80 ? 'warning' : null
 
   return (
@@ -116,7 +133,6 @@ export default function Dashboard() {
       <Navbar />
       <main className="md:ml-56 flex-1 pb-20 md:pb-0">
 
-        {/* Topbar */}
         <div className={`${topbar} border-b px-6 py-4 flex items-center justify-between sticky top-0 z-10`}>
           <div>
             <h1 className={`text-base font-semibold ${textPrimary}`}>Dashboard</h1>
@@ -139,6 +155,12 @@ export default function Dashboard() {
             >
               <FileText size={13} /> PDF
             </button>
+            <button
+              onClick={fetchExpenses}
+              className={`text-xs border ${dark ? 'border-[#2a2a2a] text-gray-400 hover:bg-[#2a2a2a]' : 'border-gray-200 text-gray-500 hover:bg-gray-100'} px-3 py-1.5 rounded-lg transition-colors`}
+            >
+              ↻ Refresh
+            </button>
             <Link to="/add" className="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
               <PlusCircle size={13} /> Add Expense
             </Link>
@@ -146,14 +168,8 @@ export default function Dashboard() {
         </div>
 
         <div className="p-6">
-
-          {/* 🔔 Budget Alert Banner */}
           {alertLevel && !alertDismissed && (
-            <div className={`rounded-2xl p-4 mb-6 flex items-start gap-3 ${
-              alertLevel === 'over'
-                ? 'bg-red-900/20 border border-red-800/40'
-                : 'bg-amber-900/20 border border-amber-800/40'
-            }`}>
+            <div className={`rounded-2xl p-4 mb-6 flex items-start gap-3 ${alertLevel === 'over' ? 'bg-red-900/20 border border-red-800/40' : 'bg-amber-900/20 border border-amber-800/40'}`}>
               <Bell size={16} className={alertLevel === 'over' ? 'text-red-400 mt-0.5' : 'text-amber-400 mt-0.5'} />
               <div className="flex-1">
                 <p className={`text-xs font-semibold mb-0.5 ${alertLevel === 'over' ? 'text-red-400' : 'text-amber-400'}`}>
@@ -170,7 +186,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* AI Insight Banner */}
           {insights.length > 0 && (
             <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-2xl p-4 mb-6 flex items-start gap-3">
               <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -186,7 +201,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Metric Cards */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
             {[
               { label: 'Total Spent', value: `₹${totalExpenses.toLocaleString('en-IN')}`, sub: `${spendingPct.toFixed(0)}% of budget`, subColor: spendingPct > 80 ? 'text-red-400' : textMuted },
@@ -202,22 +216,15 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-2 mb-5">
             {['Overview', 'Monthly', 'Categories', 'Trends'].map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-                  activeTab === tab ? 'bg-emerald-500 text-white' : `border ${dark ? 'border-[#2a2a2a] text-gray-400 hover:bg-[#2a2a2a]' : 'border-gray-200 text-gray-500 hover:bg-gray-100'}`
-                }`}
-              >
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${activeTab === tab ? 'bg-emerald-500 text-white' : `border ${dark ? 'border-[#2a2a2a] text-gray-400 hover:bg-[#2a2a2a]' : 'border-gray-200 text-gray-500 hover:bg-gray-100'}`}`}>
                 {tab}
               </button>
             ))}
           </div>
 
-          {/* Charts Row */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
             <div className={`${card} border rounded-2xl p-5`}>
               <div className="flex items-center justify-between mb-4">
@@ -265,24 +272,15 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Transactions + Budget */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className={`${card} border rounded-2xl p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <p className={`text-sm font-semibold ${textPrimary}`}>Recent transactions</p>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className={`text-xs ${inputBg} border rounded-lg px-3 py-1.5 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500`}
-                  />
-                  <select
-                    value={categoryFilter}
-                    onChange={e => setCategoryFilter(e.target.value)}
-                    className={`text-xs ${inputBg} border rounded-lg px-2 py-1.5 focus:outline-none`}
-                  >
+                  <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
+                    className={`text-xs ${inputBg} border rounded-lg px-3 py-1.5 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500`} />
+                  <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+                    className={`text-xs ${inputBg} border rounded-lg px-2 py-1.5 focus:outline-none`}>
                     {['All','Food','Transport','Shopping','Bills','Health','Entertainment','Education','Other'].map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
@@ -301,7 +299,7 @@ export default function Dashboard() {
                       <p className={`text-sm font-medium ${textPrimary} truncate`}>{exp.title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-emerald-900/40 text-emerald-400">{exp.category}</span>
-                        {exp.date && <span className={`text-[10px] ${textMuted}`}>{exp.date}</span>}
+                        {exp.date && <span className={`text-[10px] ${textMuted}`}>{new Date(exp.date).toLocaleDateString('en-IN')}</span>}
                         {exp.is_recurring && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/40 text-blue-400">🔄 Recurring</span>}
                       </div>
                     </div>
@@ -314,7 +312,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Budget Tracker */}
             <div className={`${card} border rounded-2xl p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <p className={`text-sm font-semibold ${textPrimary}`}>Budget tracker</p>
@@ -322,12 +319,8 @@ export default function Dashboard() {
               </div>
               <div className="mb-4">
                 <label className={`text-xs ${textMuted} mb-1 block`}>Monthly budget (₹)</label>
-                <input
-                  type="number"
-                  value={budget}
-                  onChange={e => { setBudget(Number(e.target.value)); setAlertDismissed(false) }}
-                  className={`text-sm ${inputBg} border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-1 focus:ring-emerald-500`}
-                />
+                <input type="number" value={budget} onChange={e => { setBudget(Number(e.target.value)); setAlertDismissed(false) }}
+                  className={`text-sm ${inputBg} border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-1 focus:ring-emerald-500`} />
               </div>
               <div className="space-y-3 mb-4">
                 {pieData.length > 0 ? pieData.sort((a, b) => b.value - a.value).slice(0, 5).map(({ name, value }) => {
