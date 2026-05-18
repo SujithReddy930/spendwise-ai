@@ -33,6 +33,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://spendwise-ai-smoky.vercel.app",
+	"https://spendwise-ai-smoky-five.vercel.app",
         FRONTEND_URL,
     ],
     allow_credentials=True,
