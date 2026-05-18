@@ -3,15 +3,14 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.receipt import Receipt
 from typing import Optional
-from PIL import Image
-import pytesseract
-import io
+import httpx
 import re
 import os
 import uuid
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
 UPLOAD_FOLDER = "uploads"
+OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")
 
 def get_db():
     db = SessionLocal()
@@ -20,29 +19,10 @@ def get_db():
     finally:
         db.close()
 
-def extract_text_from_image(contents: bytes, filename: str) -> str:
-    """Extract text from image or PDF using tesseract."""
-    text = ""
-    try:
-        if filename.lower().endswith(".pdf"):
-            from pdf2image import convert_from_bytes
-            pages = convert_from_bytes(contents)
-            for page in pages:
-                text += pytesseract.image_to_string(page)
-        else:
-            image = Image.open(io.BytesIO(contents))
-            text = pytesseract.image_to_string(image)
-    except Exception as e:
-        print(f"OCR error: {e}")
-        text = ""
-    return text
-
 def parse_receipt(text: str) -> dict:
-    """Parse extracted text to get title, amount, category."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     title = lines[0] if lines else "Unknown Store"
 
-    # Find amount — largest number with decimals
     amount_matches = re.findall(r"\d+[\.,]\d{2}", text)
     amounts = []
     for m in amount_matches:
@@ -52,15 +32,14 @@ def parse_receipt(text: str) -> dict:
             pass
     amount = str(max(amounts)) if amounts else "0"
 
-    # Detect category from keywords
     lower = text.lower()
-    if any(w in lower for w in ["restaurant", "food", "cafe", "pizza", "burger", "hotel", "swiggy", "zomato"]):
+    if any(w in lower for w in ["restaurant", "food", "cafe", "pizza", "burger", "swiggy", "zomato"]):
         category = "Food"
-    elif any(w in lower for w in ["uber", "ola", "bus", "metro", "taxi", "fuel", "petrol", "transport"]):
+    elif any(w in lower for w in ["uber", "ola", "bus", "metro", "taxi", "fuel", "petrol"]):
         category = "Transport"
     elif any(w in lower for w in ["electricity", "wifi", "internet", "water", "gas", "bill", "recharge"]):
         category = "Bills"
-    elif any(w in lower for w in ["hospital", "pharmacy", "medicine", "doctor", "clinic", "health"]):
+    elif any(w in lower for w in ["hospital", "pharmacy", "medicine", "doctor", "clinic"]):
         category = "Health"
     elif any(w in lower for w in ["movie", "cinema", "netflix", "entertainment", "game"]):
         category = "Entertainment"
@@ -76,6 +55,42 @@ def parse_receipt(text: str) -> dict:
         "raw_text": text,
     }
 
+def ocr_space_extract(contents: bytes, filename: str) -> str:
+    """Call OCR.space API to extract text from image/PDF."""
+    try:
+        fname = filename.lower()
+        if fname.endswith(".pdf"):
+            filetype = "pdf"
+        elif fname.endswith(".png"):
+            filetype = "png"
+        else:
+            filetype = "jpg"
+
+        with httpx.Client(timeout=30.0) as client:
+            res = client.post(
+                "https://api.ocr.space/parse/image",
+                data={
+                    "apikey": OCR_API_KEY,
+                    "language": "eng",
+                    "isOverlayRequired": False,
+                    "detectOrientation": True,
+                    "scale": True,
+                    "OCREngine": 2,
+                },
+                files={"file": (filename, contents, f"image/{filetype}")}
+            )
+            data = res.json()
+            if data.get("IsErroredOnProcessing"):
+                print(f"OCR.space error: {data.get('ErrorMessage')}")
+                return ""
+            results = data.get("ParsedResults", [])
+            if results:
+                return results[0].get("ParsedText", "")
+            return ""
+    except Exception as e:
+        print(f"OCR.space error: {e}")
+        return ""
+
 @router.post("/")
 async def scan_receipt(
     file: UploadFile = File(...),
@@ -84,15 +99,13 @@ async def scan_receipt(
 ):
     contents = await file.read()
 
-    # Save file
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     filename = f"{uuid.uuid4()}_{file.filename}"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     with open(filepath, "wb") as f:
         f.write(contents)
 
-    # Extract text
-    text = extract_text_from_image(contents, file.filename)
+    text = ocr_space_extract(contents, file.filename)
 
     if not text.strip():
         return {
@@ -100,14 +113,12 @@ async def scan_receipt(
             "title": "Unknown Store",
             "amount": "0",
             "category": "Other",
-            "raw_text": "Could not extract text from image. Try a clearer photo.",
+            "raw_text": "Could not extract text. Try a clearer photo.",
             "image_url": f"/uploads/{filename}",
         }
 
-    # Parse receipt
     extracted = parse_receipt(text)
 
-    # Save to DB
     receipt = Receipt(
         image_url=f"/uploads/{filename}",
         raw_text=extracted["raw_text"],
