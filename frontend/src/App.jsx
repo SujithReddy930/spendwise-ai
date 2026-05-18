@@ -6,6 +6,7 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import AddExpense from './pages/AddExpense'
 import Analytics from './pages/Analytics'
+import Predictions from './pages/Predictions'
 import Transactions from './pages/Transactions'
 import OCRScanner from './pages/OCRScanner'
 import ReceiptHistory from './pages/ReceiptHistory'
@@ -28,7 +29,7 @@ export default function App() {
             <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
             <Route path="/add" element={<PrivateRoute><AddExpense /></PrivateRoute>} />
             <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
-            <Route path="/predictions" element={<PrivateRoute><Analytics /></PrivateRoute>} />
+            <Route path="/predictions" element={<PrivateRoute><Predictions /></PrivateRoute>} />
             <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
             <Route path="/ocr" element={<PrivateRoute><OCRScanner /></PrivateRoute>} />
             <Route path="/history" element={<PrivateRoute><ReceiptHistory /></PrivateRoute>} />
