@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -11,7 +11,9 @@ import os
 
 from app.database import SessionLocal, engine
 from app.models.expense import Expense
+from app.models.user import User
 from app.schemas.expense import ExpenseCreate
+from app.core.security import decode_token
 from sqlalchemy import text
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
@@ -38,10 +40,28 @@ def get_db():
     finally:
         db.close()
 
+def get_current_user_id(authorization: Optional[str] = Header(None)) -> Optional[int]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ")[1]
+    payload = decode_token(token)
+    if not payload:
+        return None
+    try:
+        return int(payload.get("sub"))
+    except:
+        return None
+
 # ── CRUD ────────────────────────────────────────────
 
 @router.post("/")
-def create_expense(data: ExpenseCreate, db: Session = Depends(get_db)):
+def create_expense(
+    data: ExpenseCreate,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    user_id = get_current_user_id(authorization)
+
     expense_date = datetime.utcnow()
     if data.date:
         try:
@@ -57,7 +77,7 @@ def create_expense(data: ExpenseCreate, db: Session = Depends(get_db)):
         date=expense_date,
         note=data.note,
         is_recurring=data.is_recurring,
-        user_id=None,
+        user_id=user_id,
     )
     db.add(expense)
     db.commit()
@@ -65,12 +85,26 @@ def create_expense(data: ExpenseCreate, db: Session = Depends(get_db)):
     return expense
 
 @router.get("/")
-def get_expenses(db: Session = Depends(get_db)):
-    return db.query(Expense).order_by(Expense.id.desc()).all()
+def get_expenses(
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    user_id = get_current_user_id(authorization)
+    if user_id:
+        return db.query(Expense).filter(Expense.user_id == user_id).order_by(Expense.id.desc()).all()
+    return []
 
 @router.delete("/{expense_id}")
-def delete_expense(expense_id: int, db: Session = Depends(get_db)):
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+def delete_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    user_id = get_current_user_id(authorization)
+    expense = db.query(Expense).filter(
+        Expense.id == expense_id,
+        Expense.user_id == user_id
+    ).first()
     if not expense:
         return {"message": "Expense not found"}
     db.delete(expense)
@@ -80,8 +114,17 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db)):
 # ── Summary ─────────────────────────────────────────
 
 @router.get("/summary")
-def get_summary(month: int, year: int, db: Session = Depends(get_db)):
-    all_expenses = db.query(Expense).all()
+def get_summary(
+    month: int,
+    year: int,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    user_id = get_current_user_id(authorization)
+    query = db.query(Expense)
+    if user_id:
+        query = query.filter(Expense.user_id == user_id)
+    all_expenses = query.all()
     total = sum(e.amount for e in all_expenses)
     by_category = {}
     for e in all_expenses:
@@ -91,8 +134,17 @@ def get_summary(month: int, year: int, db: Session = Depends(get_db)):
 # ── AI Insights ──────────────────────────────────────
 
 @router.get("/insights")
-def get_insights(month: int, year: int, db: Session = Depends(get_db)):
-    all_expenses = db.query(Expense).all()
+def get_insights(
+    month: int,
+    year: int,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    user_id = get_current_user_id(authorization)
+    query = db.query(Expense)
+    if user_id:
+        query = query.filter(Expense.user_id == user_id)
+    all_expenses = query.all()
     curr_total = sum(e.amount for e in all_expenses)
     curr_by_cat = {}
     for e in all_expenses:
@@ -118,8 +170,17 @@ def get_insights(month: int, year: int, db: Session = Depends(get_db)):
 # ── AI Prediction ────────────────────────────────────
 
 @router.get("/prediction")
-def get_prediction(month: int, year: int, db: Session = Depends(get_db)):
-    all_expenses = db.query(Expense).all()
+def get_prediction(
+    month: int,
+    year: int,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    user_id = get_current_user_id(authorization)
+    query = db.query(Expense)
+    if user_id:
+        query = query.filter(Expense.user_id == user_id)
+    all_expenses = query.all()
     current_spent = sum(e.amount for e in all_expenses)
     days_elapsed = datetime.today().day
 
@@ -141,14 +202,23 @@ class EmailReportRequest(BaseModel):
     email: EmailStr
 
 @router.post("/send-report")
-def send_report(req: EmailReportRequest, db: Session = Depends(get_db)):
+def send_report(
+    req: EmailReportRequest,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
     if not SMTP_EMAIL or not SMTP_PASSWORD:
         raise HTTPException(
             status_code=503,
             detail="Email not configured. Set SMTP_EMAIL and SMTP_PASSWORD in your .env file."
         )
 
-    expenses = db.query(Expense).order_by(Expense.id.desc()).all()
+    user_id = get_current_user_id(authorization)
+    query = db.query(Expense).order_by(Expense.id.desc())
+    if user_id:
+        query = query.filter(Expense.user_id == user_id)
+    expenses = query.all()
+
     total = sum(e.amount for e in expenses)
     by_category = {}
     for e in expenses:
