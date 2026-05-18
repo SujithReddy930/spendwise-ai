@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Wallet, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
+import { Wallet, Eye, EyeOff, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import api from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 
@@ -14,28 +14,16 @@ function PasswordStrength({ password }) {
   const passed = checks.filter(c => c.pass).length
   const strength = passed === 0 ? null : passed === 1 ? 'weak' : passed === 2 ? 'medium' : 'strong'
 
-  const barColor = {
-    weak: 'bg-red-500',
-    medium: 'bg-amber-500',
-    strong: 'bg-emerald-500',
-  }
-
-  const barWidth = {
-    weak: 'w-1/3',
-    medium: 'w-2/3',
-    strong: 'w-full',
-  }
+  const barColor = { weak: 'bg-red-500', medium: 'bg-amber-500', strong: 'bg-emerald-500' }
+  const barWidth = { weak: 'w-1/3', medium: 'w-2/3', strong: 'w-full' }
 
   if (!password) return null
 
   return (
     <div className="mt-2 space-y-2">
-      {/* Strength bar */}
       <div className="h-1 bg-[#2a2a2a] rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-300 ${strength ? barColor[strength] : ''} ${strength ? barWidth[strength] : 'w-0'}`} />
       </div>
-
-      {/* Checks */}
       <div className="space-y-1">
         {checks.map((check, i) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -76,7 +64,12 @@ export default function Register() {
       login(res.data.user, res.data.access_token)
       navigate('/dashboard')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed')
+      const detail = err.response?.data?.detail
+      if (detail === 'Email already registered') {
+        setError('⚠️ This email is already registered. Please sign in instead.')
+      } else {
+        setError(detail || 'Registration failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -97,9 +90,18 @@ export default function Register() {
         <h2 className="text-2xl font-bold text-white mb-1">Create account</h2>
         <p className="text-sm text-gray-500 mb-6">Start tracking your expenses with AI</p>
 
+        {/* Error Banner */}
         {error && (
-          <div className="bg-red-900/20 border border-red-800/40 text-red-400 text-sm px-4 py-3 rounded-xl mb-4">
-            {error}
+          <div className="bg-red-900/20 border border-red-800/40 text-red-400 text-sm px-4 py-3 rounded-xl mb-4 flex items-start gap-2">
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+            <div>
+              <p>{error}</p>
+              {error.includes('already registered') && (
+                <Link to="/login" className="text-emerald-400 hover:text-emerald-300 font-medium underline text-xs mt-1 block">
+                  → Click here to sign in
+                </Link>
+              )}
+            </div>
           </div>
         )}
 
@@ -125,8 +127,13 @@ export default function Register() {
               required
               placeholder="you@example.com"
               value={form.email}
-              onChange={e => setForm({ ...form, email: e.target.value })}
-              className="w-full bg-[#111] border border-[#2a2a2a] text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder-gray-600"
+              onChange={e => {
+                setForm({ ...form, email: e.target.value })
+                if (error) setError('')
+              }}
+              className={`w-full bg-[#111] border text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder-gray-600 ${
+                error.includes('already registered') ? 'border-red-700' : 'border-[#2a2a2a]'
+              }`}
             />
           </div>
 
