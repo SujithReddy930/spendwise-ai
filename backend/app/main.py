@@ -9,6 +9,8 @@ from slowapi.errors import RateLimitExceeded
 from app.routes.expenses import router as expense_router
 from app.database import Base, engine
 from app.routes import auth, expenses, ocr
+from app.routes.trips import router as trips_router
+app.include_router(trips_router, prefix="/trips", tags=["trips"])
 
 Base.metadata.create_all(bind=engine)
 

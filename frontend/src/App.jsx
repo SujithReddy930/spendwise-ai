@@ -14,6 +14,8 @@ import Profile from './pages/Profile'
 import PrivateRoute from './components/PrivateRoute'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
+import Trips from './pages/Trips'
+import TripDetail from './pages/TripDetail'
 
 export default function App() {
   return (
@@ -34,6 +36,8 @@ export default function App() {
             <Route path="/ocr" element={<PrivateRoute><OCRScanner /></PrivateRoute>} />
             <Route path="/history" element={<PrivateRoute><ReceiptHistory /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+            <Route path="/trips"     element={<PrivateRoute><Trips /></PrivateRoute>} />
+            <Route path="/trips/:id" element={<PrivateRoute><TripDetail /></PrivateRoute>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
