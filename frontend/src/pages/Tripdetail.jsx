@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Plus, Trash2, X, Download, FileText,
-  RefreshCw, Edit2, Check, AlertTriangle, Users,
+  RefreshCw, Edit2, Check, AlertTriangle, Users, Pencil,
+  CheckCircle, Circle,
 } from 'lucide-react'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -43,6 +44,7 @@ export default function TripDetail() {
   const [activeTab, setActiveTab] = useState('expenses')
   const prevAlertRef = useRef(null)
 
+  // Expense form
   const [showAdd, setShowAdd] = useState(false)
   const [adding, setAdding] = useState(false)
   const [editId, setEditId] = useState(null)
@@ -50,11 +52,20 @@ export default function TripDetail() {
   const [expForm, setExpForm] = useState({ title: '', amount: '', category: 'Other', notes: '', date: '' })
   const [expErrors, setExpErrors] = useState({})
 
+  // Split form
   const [showSplit, setShowSplit] = useState(false)
   const [splitExpense, setSplitExpense] = useState(null)
   const [splitAmounts, setSplitAmounts] = useState({})
   const [showAddMember, setShowAddMember] = useState(false)
   const [memberForm, setMemberForm] = useState({ name: '', email: '' })
+
+  // Edit budget
+  const [showEditBudget, setShowEditBudget] = useState(false)
+  const [newBudget, setNewBudget] = useState('')
+  const [savingBudget, setSavingBudget] = useState(false)
+
+  // Mark as paid local state (per settlement member)
+  const [paidMembers, setPaidMembers] = useState({})
 
   const bg = dark ? 'bg-[#0d0d0d]' : 'bg-gray-50'
   const card = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
@@ -103,6 +114,37 @@ export default function TripDetail() {
     setTimeout(() => setToast(null), 4000)
   }
 
+  // ── Edit Budget ──────────────────────────────────────────────────────────
+  const handleEditBudget = () => {
+    setNewBudget(String(trip?.budget_limit || ''))
+    setShowEditBudget(true)
+  }
+
+  const handleSaveBudget = async () => {
+    if (!newBudget || Number(newBudget) <= 0) {
+      showToast('Enter a valid budget amount', 'error')
+      return
+    }
+    setSavingBudget(true)
+    try {
+      await api.patch(`/trips/${id}/budget`, { budget_limit: Number(newBudget) })
+      setShowEditBudget(false)
+      fetchAll()
+      showToast('Budget updated ✓')
+    } catch (err) {
+      showToast(err?.response?.data?.detail || 'Failed to update budget', 'error')
+    } finally {
+      setSavingBudget(false)
+    }
+  }
+
+  // ── Mark as Paid (local toggle per member in settlement) ─────────────────
+  const toggleMemberPaid = (memberId) => {
+    setPaidMembers(prev => ({ ...prev, [memberId]: !prev[memberId] }))
+    showToast(paidMembers[memberId] ? 'Marked as unpaid' : 'Marked as paid ✓')
+  }
+
+  // ── Expense handlers ─────────────────────────────────────────────────────
   const validateExp = () => {
     const errs = {}
     if (!expForm.title.trim()) errs.title = 'Title required'
@@ -158,6 +200,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to delete', 'error') }
   }
 
+  // ── Member handlers ──────────────────────────────────────────────────────
   const handleAddMember = async (e) => {
     e.preventDefault()
     if (!memberForm.name.trim()) return
@@ -178,6 +221,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to remove member', 'error') }
   }
 
+  // ── Split handlers ───────────────────────────────────────────────────────
   const openSplit = async (exp) => {
     setSplitExpense(exp)
     try {
@@ -210,6 +254,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to save splits', 'error') }
   }
 
+  // ── PDF Export ───────────────────────────────────────────────────────────
   const exportPDF = () => {
     if (!trip || !analytics) return
     const doc = new jsPDF()
@@ -263,6 +308,53 @@ export default function TripDetail() {
           <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium
             ${toast.type === 'error' ? 'bg-red-600' : toast.type === 'warning' ? 'bg-amber-600' : 'bg-emerald-600'} text-white`}>
             {toast.msg}
+          </div>
+        )}
+
+        {/* Edit Budget Modal */}
+        {showEditBudget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className={`${modalBg} border rounded-2xl p-6 w-full max-w-sm shadow-2xl`}>
+              <div className="flex items-center justify-between mb-4">
+                <p className={`font-semibold ${tp}`}>Edit Trip Budget</p>
+                <button onClick={() => setShowEditBudget(false)} className={`${tm} hover:text-red-400`}>
+                  <X size={16} />
+                </button>
+              </div>
+              <p className={`text-xs ${tm} mb-4`}>
+                Current budget: <span className="text-emerald-400 font-semibold">{formatINR(trip?.budget_limit)}</span>
+              </p>
+              <div className="mb-5">
+                <label className={`text-xs font-medium ${tm} mb-1.5 block`}>New Budget (₹)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newBudget}
+                  onChange={e => setNewBudget(e.target.value)}
+                  placeholder="e.g. 50000"
+                  autoFocus
+                  className={`w-full text-sm ${inputBg} border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEditBudget(false)}
+                  className={`flex-1 border ${border} ${tm} py-2.5 rounded-xl text-sm ${hov} transition-colors`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveBudget}
+                  disabled={savingBudget}
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                >
+                  {savingBudget
+                    ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving…</>
+                    : <><Check size={14} /> Save Budget</>
+                  }
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -444,15 +536,24 @@ export default function TripDetail() {
           {/* Stat Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: 'Total Budget', value: formatINR(analytics?.budget_limit), color: 'text-blue-400', icon: '💼' },
+              { label: 'Total Budget', value: formatINR(analytics?.budget_limit), color: 'text-blue-400', icon: '💼', editable: true },
               { label: 'Total Spent', value: formatINR(analytics?.total_spent), color: 'text-rose-400', icon: '💸' },
               { label: 'Remaining', value: formatINR(analytics?.remaining), color: analytics?.remaining < 0 ? 'text-red-400' : 'text-emerald-400', icon: '✅' },
               { label: 'Daily Average', value: formatINR(analytics?.daily_average), color: 'text-amber-400', icon: '📅' },
             ].map(c => (
-              <div key={c.label} className={`${card} border rounded-2xl p-4`}>
+              <div key={c.label} className={`${card} border rounded-2xl p-4 relative`}>
                 <p className={`text-xs ${tm} mb-2`}>{c.label}</p>
                 <p className={`text-lg font-bold ${c.color}`}>{c.value}</p>
                 <p className="text-base mt-1">{c.icon}</p>
+                {c.editable && (
+                  <button
+                    onClick={handleEditBudget}
+                    className={`absolute top-3 right-3 ${tm} hover:text-emerald-400 transition-colors`}
+                    title="Edit budget"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -461,9 +562,17 @@ export default function TripDetail() {
           <div className={`${card} border rounded-2xl p-5`}>
             <div className="flex justify-between items-center mb-3">
               <p className={`text-sm font-semibold ${tp}`}>Budget Progress</p>
-              <span className={`text-sm font-bold ${alertLevel === 'exceeded' ? 'text-red-400' : alertLevel === '90' ? 'text-orange-400' : alertLevel === '80' ? 'text-amber-400' : 'text-emerald-400'}`}>
-                {analytics?.percentage_used}%
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-bold ${alertLevel === 'exceeded' ? 'text-red-400' : alertLevel === '90' ? 'text-orange-400' : alertLevel === '80' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {analytics?.percentage_used}%
+                </span>
+                <button
+                  onClick={handleEditBudget}
+                  className={`text-xs flex items-center gap-1 ${tm} hover:text-emerald-400 border ${border} px-2 py-1 rounded-lg transition-colors`}
+                >
+                  <Pencil size={11} /> Edit Budget
+                </button>
+              </div>
             </div>
             <div className={`h-3 ${dark ? 'bg-[#2a2a2a]' : 'bg-gray-100'} rounded-full overflow-hidden`}>
               <div className={`h-full rounded-full transition-all duration-700 ${alertLevel === 'exceeded' ? 'bg-red-500' : alertLevel === '90' ? 'bg-orange-500' : alertLevel === '80' ? 'bg-amber-500' : 'bg-emerald-500'}`}
@@ -471,7 +580,7 @@ export default function TripDetail() {
             </div>
             <div className="flex justify-between text-xs mt-2">
               <span className={tm}>{formatINR(analytics?.total_spent)} spent</span>
-              <span className={tm}>{formatINR(analytics?.remaining)} left</span>
+              <span className={tm}>{formatINR(analytics?.remaining)} left of {formatINR(analytics?.budget_limit)}</span>
             </div>
           </div>
 
@@ -548,7 +657,7 @@ export default function TripDetail() {
           {/* Split & Settle Tab */}
           {activeTab === 'splits' && (
             <div className="space-y-4">
-              {/* Members Card */}
+              {/* Members */}
               <div className={`${card} border rounded-2xl p-5`}>
                 <div className="flex items-center justify-between mb-4">
                   <p className={`text-sm font-semibold ${tp}`}>Trip Members</p>
@@ -592,36 +701,97 @@ export default function TripDetail() {
                 )}
               </div>
 
-              {/* Settlement Summary */}
+              {/* Settlement Summary with Mark as Paid */}
               <div className={`${card} border rounded-2xl p-5`}>
-                <p className={`text-sm font-semibold ${tp} mb-4`}>💰 Settlement Summary</p>
+                <div className="flex items-center justify-between mb-4">
+                  <p className={`text-sm font-semibold ${tp}`}>💰 Settlement Summary</p>
+                  {Object.values(paidMembers).some(Boolean) && (
+                    <span className="text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-800/30 px-2 py-1 rounded-full">
+                      {Object.values(paidMembers).filter(Boolean).length} settled
+                    </span>
+                  )}
+                </div>
+
                 {settlement.length === 0 ? (
                   <p className={`text-sm ${tm} text-center py-6`}>Add members and split expenses to see who owes what.</p>
                 ) : (
                   <div className="space-y-3">
-                    {settlement.map(s => (
-                      <div key={s.member_id} className={`flex items-center justify-between p-4 rounded-2xl ${dark ? 'bg-[#111]' : 'bg-gray-50'}`}>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-base font-bold text-emerald-400">
-                            {s.name[0].toUpperCase()}
+                    {settlement.map(s => {
+                      const isPaid = paidMembers[s.member_id] || false
+                      return (
+                        <div
+                          key={s.member_id}
+                          className={`flex items-center justify-between p-4 rounded-2xl transition-all ${
+                            isPaid
+                              ? dark ? 'bg-emerald-900/10 border border-emerald-900/30' : 'bg-emerald-50 border border-emerald-100'
+                              : dark ? 'bg-[#111]' : 'bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold transition-all ${
+                              isPaid ? 'bg-emerald-500/30 text-emerald-400' : 'bg-emerald-500/20 text-emerald-400'
+                            }`}>
+                              {isPaid ? '✓' : s.name[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className={`text-sm font-semibold ${isPaid ? 'text-emerald-400 line-through opacity-60' : tp}`}>
+                                  {s.name}
+                                </p>
+                                {isPaid && (
+                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-medium">
+                                    Settled
+                                  </span>
+                                )}
+                              </div>
+                              <p className={`text-xs ${tm}`}>
+                                Paid: {formatINR(s.total_paid)} · Owes: {formatINR(s.total_owes)}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className={`text-sm font-semibold ${tp}`}>{s.name}</p>
-                            <p className={`text-xs ${tm}`}>
-                              Paid: {formatINR(s.total_paid)} · Owes: {formatINR(s.total_owes)}
-                            </p>
+
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className={`text-base font-bold ${isPaid ? 'text-emerald-400 opacity-50' : s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {s.net >= 0 ? `+${formatINR(s.net)}` : `-${formatINR(Math.abs(s.net))}`}
+                              </p>
+                              <p className={`text-xs font-medium ${isPaid ? 'text-emerald-400 opacity-50' : s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {isPaid ? 'settled' : s.net >= 0 ? '← to receive' : '→ to pay'}
+                              </p>
+                            </div>
+
+                            {/* Mark as Paid button */}
+                            <button
+                              onClick={() => toggleMemberPaid(s.member_id)}
+                              title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
+                              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                                isPaid
+                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  : `border-2 ${dark ? 'border-[#3a3a3a] hover:border-emerald-500' : 'border-gray-300 hover:border-emerald-500'} ${tm} hover:text-emerald-400`
+                              }`}
+                            >
+                              {isPaid ? <CheckCircle size={16} /> : <Circle size={16} />}
+                            </button>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className={`text-base font-bold ${s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {s.net >= 0 ? `+${formatINR(s.net)}` : `-${formatINR(Math.abs(s.net))}`}
-                          </p>
-                          <p className={`text-xs font-medium ${s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {s.net >= 0 ? '← to receive' : '→ to pay'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
+                  </div>
+                )}
+
+                {settlement.length > 0 && (
+                  <div className={`mt-4 pt-4 border-t ${border} flex items-center justify-between`}>
+                    <p className={`text-xs ${tm}`}>
+                      {Object.values(paidMembers).filter(Boolean).length} of {settlement.length} members settled
+                    </p>
+                    {Object.values(paidMembers).some(Boolean) && (
+                      <button
+                        onClick={() => setPaidMembers({})}
+                        className={`text-xs ${tm} hover:text-red-400 transition-colors`}
+                      >
+                        Reset all
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -631,7 +801,7 @@ export default function TripDetail() {
                 <div className={`${card} border rounded-2xl p-4`}>
                   <p className={`text-xs font-semibold ${tp} mb-2`}>💡 How to split an expense</p>
                   <p className={`text-xs ${tm}`}>
-                    Go to the <span className="text-emerald-400">🧾 Expenses</span> tab → hover over any expense → click the <span className="text-emerald-400">👥 split icon</span> → split evenly or enter custom amounts → save.
+                    Go to <span className="text-emerald-400">🧾 Expenses</span> → hover any expense → click <span className="text-emerald-400">👥</span> → split evenly or enter custom amounts → Save. Then come back here and click ○ to mark someone as settled.
                   </p>
                 </div>
               )}

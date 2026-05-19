@@ -42,7 +42,6 @@ def get_db():
 
 
 def get_current_user_id(authorization: str = Header(...)) -> int:
-    """Extract user_id from Bearer token — matches decode_token in security.py"""
     try:
         token = authorization.replace("Bearer ", "")
         payload = decode_token(token)
@@ -137,7 +136,6 @@ def get_all_trips_summary(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    """Lightweight summary of all trips for the list page."""
     trips = db.query(Trip).filter(
         Trip.user_id == user_id
     ).order_by(Trip.created_at.desc()).all()
@@ -217,7 +215,33 @@ def update_trip(
         setattr(trip, k, v)
     db.commit()
     db.refresh(trip)
-    return {"message": "Trip updated", "id": trip.id}
+    return {"message": "Trip updated", "id": trip.id, "budget_limit": trip.budget_limit}
+
+
+# ── NEW: Update budget only ──────────────────────────────────────────────────
+
+@router.patch("/{trip_id}/budget")
+def update_budget(
+    trip_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    trip = get_trip_or_404(trip_id, user_id, db)
+    new_budget = payload.get("budget_limit")
+    if not new_budget or float(new_budget) <= 0:
+        raise HTTPException(status_code=400, detail="Budget must be greater than 0")
+    trip.budget_limit = float(new_budget)
+    # Reset alert flags so they fire again at correct thresholds
+    trip.alert_80_sent = False
+    trip.alert_90_sent = False
+    trip.alert_exceeded_sent = False
+    db.commit()
+    db.refresh(trip)
+    return {
+        "message": "Budget updated successfully",
+        "budget_limit": trip.budget_limit
+    }
 
 
 @router.delete("/{trip_id}", status_code=204)
@@ -246,7 +270,6 @@ def add_expense(
     db.commit()
     db.refresh(expense)
 
-    # Recalculate and persist alert thresholds
     total = calc_total_spent(trip)
     pct = (total / trip.budget_limit * 100) if trip.budget_limit else 0
     check_and_update_alerts(trip, pct, db)
@@ -359,14 +382,12 @@ def get_trip_analytics(
     check_and_update_alerts(trip, pct, db)
     alert = build_alert(pct)
 
-    # Days calculation
     now = datetime.utcnow()
     days_total = max((trip.end_date - trip.start_date).days, 1)
     days_elapsed = max(min((now - trip.start_date).days + 1, days_total), 1)
     daily_avg = total_spent / days_elapsed if days_elapsed > 0 else 0
     projected = daily_avg * days_total
 
-    # Category breakdown
     cat_totals: dict = defaultdict(float)
     cat_counts: dict = defaultdict(int)
     for e in expenses:
@@ -384,7 +405,6 @@ def get_trip_analytics(
         for cat, total in sorted(cat_totals.items(), key=lambda x: -x[1])
     ]
 
-    # Daily timeline
     daily: dict = defaultdict(float)
     for e in expenses:
         day_str = e.date.strftime("%Y-%m-%d") if e.date else now.strftime("%Y-%m-%d")
