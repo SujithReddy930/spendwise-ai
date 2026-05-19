@@ -10,14 +10,13 @@ import Predictions from './pages/Predictions'
 import Transactions from './pages/Transactions'
 import Trips from './pages/Trips'
 import TripDetail from './pages/TripDetail'
-import TripWallet from './pages/TripWallet'   // ← NEW
+import TripWallet from './pages/TripWallet'
 import OCRScanner from './pages/OCRScanner'
 import ReceiptHistory from './pages/ReceiptHistory'
 import Profile from './pages/Profile'
 import PrivateRoute from './components/PrivateRoute'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
-import TripWallet from './pages/TripWallet'
 
 export default function App() {
   return (
@@ -37,11 +36,10 @@ export default function App() {
             <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
             <Route path="/trips" element={<PrivateRoute><Trips /></PrivateRoute>} />
             <Route path="/trips/:id" element={<PrivateRoute><TripDetail /></PrivateRoute>} />
-            <Route path="/trips/:id/wallet" element={<PrivateRoute><TripWallet /></PrivateRoute>} />  {/* ← NEW */}
+            <Route path="/trips/:id/wallet" element={<PrivateRoute><TripWallet /></PrivateRoute>} />
             <Route path="/ocr" element={<PrivateRoute><OCRScanner /></PrivateRoute>} />
             <Route path="/history" element={<PrivateRoute><ReceiptHistory /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-	    <Route path="/trips/:id/wallet" element={<PrivateRoute><TripWallet /></PrivateRoute>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
