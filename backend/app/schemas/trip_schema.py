@@ -1,14 +1,7 @@
-"""
-Trip Pydantic Schemas
-Request/response validation for trip expense module.
-"""
-
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
 
-
-# ── Trip Expense Schemas ────────────────────────────────────────────────────
 
 class TripExpenseCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
@@ -46,8 +39,6 @@ class TripExpenseOut(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ── Trip Schemas ────────────────────────────────────────────────────────────
 
 class TripCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
@@ -93,8 +84,6 @@ class TripOut(BaseModel):
         from_attributes = True
 
 
-# ── Analytics Schemas ───────────────────────────────────────────────────────
-
 class CategoryBreakdown(BaseModel):
     category: str
     total: float
@@ -109,7 +98,7 @@ class DailySpend(BaseModel):
 
 
 class AlertStatus(BaseModel):
-    level: Optional[str]   # "80", "90", "exceeded", or None
+    level: Optional[str]
     message: str
     percentage: float
 
@@ -131,3 +120,40 @@ class TripAnalytics(BaseModel):
     category_breakdown: List[CategoryBreakdown]
     daily_timeline: List[DailySpend]
     expense_count: int
+
+
+# ── Split Schemas ──────────────────────────────────────────────────────────
+
+class MemberCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    email: Optional[str] = None
+
+
+class MemberOut(BaseModel):
+    id: int
+    name: str
+    email: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class SplitCreate(BaseModel):
+    member_id: int
+    amount: float = Field(..., gt=0)
+    paid: Optional[bool] = False
+
+
+class SplitOut(BaseModel):
+    id: int
+    member_id: int
+    amount: float
+    paid: bool
+    member: MemberOut
+
+    class Config:
+        from_attributes = True
+
+
+class ExpenseSplitRequest(BaseModel):
+    splits: List[SplitCreate]
