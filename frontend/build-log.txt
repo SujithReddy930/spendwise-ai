@@ -1,0 +1,24 @@
+﻿[36mvite v8.0.13 [32mbuilding client environment for production...[36m[39m
+[2K
+transforming...Γ£ô 2585 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                          0.45 kB Γöé gzip:   0.29 kB
+dist/assets/index-C51wV9N4.css          27.50 kB Γöé gzip:   5.87 kB
+dist/assets/purify.es-BhRg3p_C.js       23.45 kB Γöé gzip:   9.28 kB
+dist/assets/index.es-BkhZXASj.js       151.38 kB Γöé gzip:  48.87 kB
+dist/assets/html2canvas-BlIsHEkg.js    199.56 kB Γöé gzip:  46.78 kB
+dist/assets/index-D0oHhIbj.js        1,262.24 kB Γöé gzip: 374.65 kB
+
+node.exe : [33m[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33m[33m[PLUG...is a breakdown::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  - rolldown:vite-resolve (36%)
+  - vite:build-html (31%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+[39m
+[32mΓ£ô built in 3.34s[39m
