@@ -1,5 +1,5 @@
 """
-Trip Expense Routes
+Trip Expense Routes — complete with members, splits, settlement, budget patch.
 Uses same auth pattern as expenses.py: decode_token from Authorization header.
 """
 
@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
 from collections import defaultdict
+from pydantic import BaseModel
 
 from app.database import SessionLocal
-from app.models.trip import Trip, TripExpense
+from app.models.trip import Trip, TripExpense, TripMember, ExpenseSplit
 from app.schemas.trip_schema import (
     TripCreate, TripUpdate,
     TripExpenseCreate, TripExpenseUpdate,
@@ -29,6 +30,24 @@ CATEGORY_COLORS = {
     "Entertainment": "#ef4444",
     "Other":         "#6b7280",
 }
+
+
+# ── Pydantic schemas ─────────────────────────────────────────────────────────
+
+class BudgetUpdate(BaseModel):
+    budget_limit: float
+
+class MemberCreate(BaseModel):
+    name: str
+    email: Optional[str] = None
+
+class SplitItem(BaseModel):
+    member_id: int
+    amount: float
+    paid: bool = False
+
+class SplitsPayload(BaseModel):
+    splits: list[SplitItem]
 
 
 # ── DB + Auth ────────────────────────────────────────────────────────────────
@@ -70,39 +89,33 @@ def calc_total_spent(trip: Trip) -> float:
 
 def build_alert(pct: float) -> AlertStatus:
     if pct >= 100:
-        return AlertStatus(
-            level="exceeded",
-            message=f"⚠️ Budget exceeded! You've spent {pct:.1f}% of your trip budget.",
-            percentage=pct,
-        )
+        return AlertStatus(level="exceeded", message=f"Budget exceeded! You've spent {pct:.1f}% of your trip budget.", percentage=pct)
     elif pct >= 90:
-        return AlertStatus(
-            level="90",
-            message=f"🔴 90% of your budget is used ({pct:.1f}%). Spend carefully!",
-            percentage=pct,
-        )
+        return AlertStatus(level="90", message=f"90% of your budget is used ({pct:.1f}%). Spend carefully!", percentage=pct)
     elif pct >= 80:
-        return AlertStatus(
-            level="80",
-            message=f"🟡 80% of your budget is used ({pct:.1f}%). You're getting close.",
-            percentage=pct,
-        )
+        return AlertStatus(level="80", message=f"80% of your budget is used ({pct:.1f}%). You're getting close.", percentage=pct)
     return AlertStatus(level=None, message="Budget is on track.", percentage=pct)
 
 
 def check_and_update_alerts(trip: Trip, pct: float, db: Session):
     changed = False
     if pct >= 80 and not trip.alert_80_sent:
-        trip.alert_80_sent = True
-        changed = True
+        trip.alert_80_sent = True; changed = True
     if pct >= 90 and not trip.alert_90_sent:
-        trip.alert_90_sent = True
-        changed = True
+        trip.alert_90_sent = True; changed = True
     if pct >= 100 and not trip.alert_exceeded_sent:
-        trip.alert_exceeded_sent = True
-        changed = True
+        trip.alert_exceeded_sent = True; changed = True
     if changed:
         db.commit()
+
+
+def fmt_expense(e: TripExpense) -> dict:
+    return {
+        "id": e.id, "trip_id": e.trip_id, "title": e.title,
+        "amount": e.amount, "category": e.category, "notes": e.notes,
+        "date": e.date.isoformat() if e.date else None,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+    }
 
 
 # ── Trip CRUD ────────────────────────────────────────────────────────────────
@@ -118,13 +131,9 @@ def create_trip(
     db.commit()
     db.refresh(trip)
     return {
-        "id": trip.id,
-        "name": trip.name,
-        "destination": trip.destination,
-        "description": trip.description,
-        "budget_limit": trip.budget_limit,
-        "start_date": trip.start_date.isoformat(),
-        "end_date": trip.end_date.isoformat(),
+        "id": trip.id, "name": trip.name, "destination": trip.destination,
+        "description": trip.description, "budget_limit": trip.budget_limit,
+        "start_date": trip.start_date.isoformat(), "end_date": trip.end_date.isoformat(),
         "status": trip.status,
         "created_at": trip.created_at.isoformat() if trip.created_at else None,
         "expenses": [],
@@ -136,32 +145,19 @@ def get_all_trips_summary(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    trips = db.query(Trip).filter(
-        Trip.user_id == user_id
-    ).order_by(Trip.created_at.desc()).all()
-
+    trips = db.query(Trip).filter(Trip.user_id == user_id).order_by(Trip.created_at.desc()).all()
     result = []
     for trip in trips:
         total_spent = sum(e.amount for e in trip.expenses)
         pct = (total_spent / trip.budget_limit * 100) if trip.budget_limit else 0
         result.append({
-            "id": trip.id,
-            "name": trip.name,
-            "destination": trip.destination,
-            "budget_limit": trip.budget_limit,
-            "total_spent": round(total_spent, 2),
+            "id": trip.id, "name": trip.name, "destination": trip.destination,
+            "budget_limit": trip.budget_limit, "total_spent": round(total_spent, 2),
             "remaining": round(trip.budget_limit - total_spent, 2),
-            "percentage_used": round(pct, 1),
-            "status": trip.status,
-            "start_date": trip.start_date.isoformat(),
-            "end_date": trip.end_date.isoformat(),
+            "percentage_used": round(pct, 1), "status": trip.status,
+            "start_date": trip.start_date.isoformat(), "end_date": trip.end_date.isoformat(),
             "expense_count": len(trip.expenses),
-            "alert_level": (
-                "exceeded" if pct >= 100
-                else "90" if pct >= 90
-                else "80" if pct >= 80
-                else None
-            ),
+            "alert_level": "exceeded" if pct >= 100 else "90" if pct >= 90 else "80" if pct >= 80 else None,
             "created_at": trip.created_at.isoformat() if trip.created_at else None,
         })
     return result
@@ -175,29 +171,16 @@ def get_trip(
 ):
     trip = get_trip_or_404(trip_id, user_id, db)
     return {
-        "id": trip.id,
-        "name": trip.name,
-        "destination": trip.destination,
-        "description": trip.description,
-        "budget_limit": trip.budget_limit,
-        "start_date": trip.start_date.isoformat(),
-        "end_date": trip.end_date.isoformat(),
+        "id": trip.id, "name": trip.name, "destination": trip.destination,
+        "description": trip.description, "budget_limit": trip.budget_limit,
+        "start_date": trip.start_date.isoformat(), "end_date": trip.end_date.isoformat(),
         "status": trip.status,
         "alert_80_sent": trip.alert_80_sent,
         "alert_90_sent": trip.alert_90_sent,
         "alert_exceeded_sent": trip.alert_exceeded_sent,
         "created_at": trip.created_at.isoformat() if trip.created_at else None,
         "expenses": [
-            {
-                "id": e.id,
-                "trip_id": e.trip_id,
-                "title": e.title,
-                "amount": e.amount,
-                "category": e.category,
-                "notes": e.notes,
-                "date": e.date.isoformat() if e.date else None,
-                "created_at": e.created_at.isoformat() if e.created_at else None,
-            }
+            fmt_expense(e)
             for e in sorted(trip.expenses, key=lambda x: x.date or datetime.min, reverse=True)
         ],
     }
@@ -218,30 +201,24 @@ def update_trip(
     return {"message": "Trip updated", "id": trip.id, "budget_limit": trip.budget_limit}
 
 
-# ── NEW: Update budget only ──────────────────────────────────────────────────
-
 @router.patch("/{trip_id}/budget")
 def update_budget(
     trip_id: int,
-    payload: dict,
+    payload: BudgetUpdate,
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
     trip = get_trip_or_404(trip_id, user_id, db)
-    new_budget = payload.get("budget_limit")
-    if not new_budget or float(new_budget) <= 0:
+    if payload.budget_limit <= 0:
         raise HTTPException(status_code=400, detail="Budget must be greater than 0")
-    trip.budget_limit = float(new_budget)
-    # Reset alert flags so they fire again at correct thresholds
+    trip.budget_limit = payload.budget_limit
+    # Reset alert flags so they fire again at new thresholds
     trip.alert_80_sent = False
     trip.alert_90_sent = False
     trip.alert_exceeded_sent = False
     db.commit()
     db.refresh(trip)
-    return {
-        "message": "Budget updated successfully",
-        "budget_limit": trip.budget_limit
-    }
+    return {"message": "Budget updated", "budget_limit": trip.budget_limit}
 
 
 @router.delete("/{trip_id}", status_code=204)
@@ -269,21 +246,10 @@ def add_expense(
     db.add(expense)
     db.commit()
     db.refresh(expense)
-
     total = calc_total_spent(trip)
     pct = (total / trip.budget_limit * 100) if trip.budget_limit else 0
     check_and_update_alerts(trip, pct, db)
-
-    return {
-        "id": expense.id,
-        "trip_id": expense.trip_id,
-        "title": expense.title,
-        "amount": expense.amount,
-        "category": expense.category,
-        "notes": expense.notes,
-        "date": expense.date.isoformat() if expense.date else None,
-        "created_at": expense.created_at.isoformat() if expense.created_at else None,
-    }
+    return fmt_expense(expense)
 
 
 @router.get("/{trip_id}/expenses")
@@ -297,20 +263,7 @@ def list_expenses(
         TripExpense.trip_id == trip_id,
         TripExpense.user_id == user_id,
     ).order_by(TripExpense.date.desc()).all()
-
-    return [
-        {
-            "id": e.id,
-            "trip_id": e.trip_id,
-            "title": e.title,
-            "amount": e.amount,
-            "category": e.category,
-            "notes": e.notes,
-            "date": e.date.isoformat() if e.date else None,
-            "created_at": e.created_at.isoformat() if e.created_at else None,
-        }
-        for e in expenses
-    ]
+    return [fmt_expense(e) for e in expenses]
 
 
 @router.put("/{trip_id}/expenses/{expense_id}")
@@ -333,16 +286,7 @@ def update_expense(
         setattr(exp, k, v)
     db.commit()
     db.refresh(exp)
-    return {
-        "id": exp.id,
-        "trip_id": exp.trip_id,
-        "title": exp.title,
-        "amount": exp.amount,
-        "category": exp.category,
-        "notes": exp.notes,
-        "date": exp.date.isoformat() if exp.date else None,
-        "created_at": exp.created_at.isoformat() if exp.created_at else None,
-    }
+    return fmt_expense(exp)
 
 
 @router.delete("/{trip_id}/expenses/{expense_id}", status_code=204)
@@ -362,6 +306,130 @@ def delete_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     db.delete(exp)
     db.commit()
+
+
+# ── Members ──────────────────────────────────────────────────────────────────
+
+@router.get("/{trip_id}/members")
+def list_members(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    get_trip_or_404(trip_id, user_id, db)
+    members = db.query(TripMember).filter(TripMember.trip_id == trip_id).all()
+    return [
+        {"id": m.id, "name": m.name, "email": m.email,
+         "created_at": m.created_at.isoformat() if m.created_at else None}
+        for m in members
+    ]
+
+
+@router.post("/{trip_id}/members", status_code=201)
+def add_member(
+    trip_id: int,
+    data: MemberCreate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    get_trip_or_404(trip_id, user_id, db)
+    member = TripMember(trip_id=trip_id, user_id=user_id, name=data.name, email=data.email)
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return {"id": member.id, "name": member.name, "email": member.email}
+
+
+@router.delete("/{trip_id}/members/{member_id}", status_code=204)
+def delete_member(
+    trip_id: int,
+    member_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    get_trip_or_404(trip_id, user_id, db)
+    member = db.query(TripMember).filter(
+        TripMember.id == member_id,
+        TripMember.trip_id == trip_id,
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    db.delete(member)
+    db.commit()
+
+
+# ── Splits ───────────────────────────────────────────────────────────────────
+
+@router.get("/{trip_id}/expenses/{expense_id}/splits")
+def get_splits(
+    trip_id: int,
+    expense_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    get_trip_or_404(trip_id, user_id, db)
+    splits = db.query(ExpenseSplit).filter(
+        ExpenseSplit.trip_expense_id == expense_id
+    ).all()
+    return [
+        {"id": s.id, "member_id": s.member_id, "amount": s.amount, "paid": s.paid}
+        for s in splits
+    ]
+
+
+@router.post("/{trip_id}/expenses/{expense_id}/splits", status_code=201)
+def save_splits(
+    trip_id: int,
+    expense_id: int,
+    payload: SplitsPayload,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    get_trip_or_404(trip_id, user_id, db)
+    # Delete existing splits for this expense then re-insert
+    db.query(ExpenseSplit).filter(
+        ExpenseSplit.trip_expense_id == expense_id
+    ).delete()
+    db.commit()
+    for s in payload.splits:
+        split = ExpenseSplit(
+            trip_expense_id=expense_id,
+            member_id=s.member_id,
+            amount=s.amount,
+            paid=s.paid,
+        )
+        db.add(split)
+    db.commit()
+    return {"message": "Splits saved", "count": len(payload.splits)}
+
+
+# ── Settlement ───────────────────────────────────────────────────────────────
+
+@router.get("/{trip_id}/settlement")
+def get_settlement(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    Returns how much each member owes vs has paid.
+    net > 0 = gets money back, net < 0 = owes money.
+    """
+    get_trip_or_404(trip_id, user_id, db)
+    members = db.query(TripMember).filter(TripMember.trip_id == trip_id).all()
+    result = []
+    for m in members:
+        splits = db.query(ExpenseSplit).filter(ExpenseSplit.member_id == m.id).all()
+        total_owes = sum(s.amount for s in splits)
+        total_paid = sum(s.amount for s in splits if s.paid)
+        net = total_paid - total_owes
+        result.append({
+            "member_id": m.id, "name": m.name, "email": m.email,
+            "total_owes": round(total_owes, 2),
+            "total_paid": round(total_paid, 2),
+            "net": round(net, 2),
+        })
+    return result
 
 
 # ── Analytics ────────────────────────────────────────────────────────────────
@@ -396,9 +464,7 @@ def get_trip_analytics(
 
     category_breakdown = [
         {
-            "category": cat,
-            "total": round(total, 2),
-            "count": cat_counts[cat],
+            "category": cat, "total": round(total, 2), "count": cat_counts[cat],
             "percentage": round(total / total_spent * 100, 1) if total_spent > 0 else 0,
             "color": CATEGORY_COLORS.get(cat, "#6b7280"),
         }
@@ -416,23 +482,13 @@ def get_trip_analytics(
     ]
 
     return {
-        "trip_id": trip.id,
-        "trip_name": trip.name,
-        "destination": trip.destination,
-        "budget_limit": trip.budget_limit,
-        "total_spent": round(total_spent, 2),
-        "remaining": round(remaining, 2),
-        "percentage_used": round(pct, 1),
-        "days_total": days_total,
-        "days_elapsed": days_elapsed,
-        "daily_average": round(daily_avg, 2),
-        "projected_total": round(projected, 2),
+        "trip_id": trip.id, "trip_name": trip.name, "destination": trip.destination,
+        "budget_limit": trip.budget_limit, "total_spent": round(total_spent, 2),
+        "remaining": round(remaining, 2), "percentage_used": round(pct, 1),
+        "days_total": days_total, "days_elapsed": days_elapsed,
+        "daily_average": round(daily_avg, 2), "projected_total": round(projected, 2),
         "status": trip.status,
-        "alert": {
-            "level": alert.level,
-            "message": alert.message,
-            "percentage": alert.percentage,
-        },
+        "alert": {"level": alert.level, "message": alert.message, "percentage": alert.percentage},
         "category_breakdown": category_breakdown,
         "daily_timeline": daily_timeline,
         "expense_count": len(expenses),
