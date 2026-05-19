@@ -8,14 +8,14 @@ import AddExpense from './pages/AddExpense'
 import Analytics from './pages/Analytics'
 import Predictions from './pages/Predictions'
 import Transactions from './pages/Transactions'
+import Trips from './pages/Trips'
+import TripDetail from './pages/TripDetail'
 import OCRScanner from './pages/OCRScanner'
 import ReceiptHistory from './pages/ReceiptHistory'
 import Profile from './pages/Profile'
 import PrivateRoute from './components/PrivateRoute'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
-import Trips from './pages/Trips'
-import TripDetail from './pages/TripDetail'
 
 export default function App() {
   return (
@@ -33,14 +33,14 @@ export default function App() {
             <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
             <Route path="/predictions" element={<PrivateRoute><Predictions /></PrivateRoute>} />
             <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
+            <Route path="/trips" element={<PrivateRoute><Trips /></PrivateRoute>} />
+            <Route path="/trips/:id" element={<PrivateRoute><TripDetail /></PrivateRoute>} />
             <Route path="/ocr" element={<PrivateRoute><OCRScanner /></PrivateRoute>} />
             <Route path="/history" element={<PrivateRoute><ReceiptHistory /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-            <Route path="/trips"     element={<PrivateRoute><Trips /></PrivateRoute>} />
-            <Route path="/trips/:id" element={<PrivateRoute><TripDetail /></PrivateRoute>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>
   )
-} 
+}

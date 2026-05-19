@@ -1,8 +1,7 @@
 import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -41,7 +40,7 @@ app.include_router(auth.router)
 app.include_router(expense_router)
 app.include_router(expenses.router)
 app.include_router(ocr.router)
-app.include_router(trips_router, prefix="/trips", tags=["trips"])
+app.include_router(trips_router)
 
 @app.get("/")
 def root():
