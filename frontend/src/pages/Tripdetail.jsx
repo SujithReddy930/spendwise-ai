@@ -1,9 +1,16 @@
+/**
+ * TripDetail.jsx — Full trip page with:
+ *   - Edit Budget (pencil icon on Total Budget card + Budget Progress bar)
+ *   - Mark as Paid (circle button on each settlement member row)
+ *   - Split expenses, add/edit/delete expenses, members, analytics
+ */
+
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Plus, Trash2, X, Download, FileText,
-  RefreshCw, Edit2, Check, AlertTriangle, Users, Pencil,
-  CheckCircle, Circle,
+  RefreshCw, Edit2, Check, AlertTriangle, Users,
+  Pencil, CheckCircle, Circle,
 } from 'lucide-react'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -26,60 +33,66 @@ const CAT_ICONS = {
   Fuel: '⛽', Entertainment: '🎬', Other: '💳',
 }
 
-const formatINR = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
+const formatINR  = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
 const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
 
 export default function TripDetail() {
   const { dark } = useTheme()
-  const { id } = useParams()
+  const { id }   = useParams()
   const navigate = useNavigate()
 
-  const [trip, setTrip] = useState(null)
-  const [analytics, setAnalytics] = useState(null)
-  const [members, setMembers] = useState([])
+  const [trip,       setTrip]       = useState(null)
+  const [analytics,  setAnalytics]  = useState(null)
+  const [members,    setMembers]    = useState([])
   const [settlement, setSettlement] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState(null)
-  const [dismissed, setDismissed] = useState(false)
-  const [activeTab, setActiveTab] = useState('expenses')
+  const [loading,    setLoading]    = useState(true)
+  const [toast,      setToast]      = useState(null)
+  const [dismissed,  setDismissed]  = useState(false)
+  const [activeTab,  setActiveTab]  = useState('expenses')
   const prevAlertRef = useRef(null)
 
-  // Expense form
-  const [showAdd, setShowAdd] = useState(false)
-  const [adding, setAdding] = useState(false)
-  const [editId, setEditId] = useState(null)
-  const [deleteId, setDeleteId] = useState(null)
-  const [expForm, setExpForm] = useState({ title: '', amount: '', category: 'Other', notes: '', date: '' })
+  // ── Expense form state ──
+  const [showAdd,   setShowAdd]   = useState(false)
+  const [adding,    setAdding]    = useState(false)
+  const [editId,    setEditId]    = useState(null)
+  const [deleteId,  setDeleteId]  = useState(null)
+  const [expForm,   setExpForm]   = useState({ title: '', amount: '', category: 'Other', notes: '', date: '' })
   const [expErrors, setExpErrors] = useState({})
 
-  // Split form
-  const [showSplit, setShowSplit] = useState(false)
+  // ── Split state ──
+  const [showSplit,    setShowSplit]    = useState(false)
   const [splitExpense, setSplitExpense] = useState(null)
   const [splitAmounts, setSplitAmounts] = useState({})
+
+  // ── Member form state ──
   const [showAddMember, setShowAddMember] = useState(false)
-  const [memberForm, setMemberForm] = useState({ name: '', email: '' })
+  const [memberForm,    setMemberForm]    = useState({ name: '', email: '' })
 
-  // Edit budget
+  // ── Edit Budget state ──
   const [showEditBudget, setShowEditBudget] = useState(false)
-  const [newBudget, setNewBudget] = useState('')
-  const [savingBudget, setSavingBudget] = useState(false)
+  const [newBudget,      setNewBudget]      = useState('')
+  const [savingBudget,   setSavingBudget]   = useState(false)
 
-  // Mark as paid local state (per settlement member)
+  // ── Mark as Paid (local per-member toggle) ──
   const [paidMembers, setPaidMembers] = useState({})
 
-  const bg = dark ? 'bg-[#0d0d0d]' : 'bg-gray-50'
-  const card = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const topbar = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const tp = dark ? 'text-white' : 'text-gray-900'
-  const tm = dark ? 'text-gray-400' : 'text-gray-500'
-  const inputBg = dark ? 'bg-[#111] border-[#333] text-gray-200 placeholder-gray-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'
-  const modalBg = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const border = dark ? 'border-[#2a2a2a]' : 'border-gray-200'
-  const hov = dark ? 'hover:bg-[#252525]' : 'hover:bg-gray-50'
+  // ── Theme helpers ──
+  const bg      = dark ? 'bg-[#0d0d0d]'                    : 'bg-gray-50'
+  const card    = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
+  const topbar  = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
+  const tp      = dark ? 'text-white'                       : 'text-gray-900'
+  const tm      = dark ? 'text-gray-400'                    : 'text-gray-500'
+  const inputBg = dark
+    ? 'bg-[#111] border-[#333] text-gray-200 placeholder-gray-600'
+    : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'
+  const modalBg = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
+  const border  = dark ? 'border-[#2a2a2a]'                 : 'border-gray-200'
+  const hov     = dark ? 'hover:bg-[#252525]'               : 'hover:bg-gray-50'
   const tooltip = dark
     ? { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 11 }
-    : { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 11 }
+    : { background: '#fff',    border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 11 }
 
+  // ── Fetch all data ──
   const fetchAll = useCallback(async () => {
     try {
       const [tripRes, analyticsRes, membersRes, settlementRes] = await Promise.all([
@@ -114,7 +127,7 @@ export default function TripDetail() {
     setTimeout(() => setToast(null), 4000)
   }
 
-  // ── Edit Budget ──────────────────────────────────────────────────────────
+  // ── Edit Budget ──
   const handleEditBudget = () => {
     setNewBudget(String(trip?.budget_limit || ''))
     setShowEditBudget(true)
@@ -138,18 +151,26 @@ export default function TripDetail() {
     }
   }
 
-  // ── Mark as Paid (local toggle per member in settlement) ─────────────────
-  const toggleMemberPaid = (memberId) => {
-    setPaidMembers(prev => ({ ...prev, [memberId]: !prev[memberId] }))
-    showToast(paidMembers[memberId] ? 'Marked as unpaid' : 'Marked as paid ✓')
+  // ── Mark as Paid ──
+  const togglePaid = (memberId) => {
+    const nowPaid = !paidMembers[memberId]
+    setPaidMembers(prev => ({ ...prev, [memberId]: nowPaid }))
+    showToast(nowPaid ? 'Marked as settled ✓' : 'Marked as unpaid')
   }
 
-  // ── Expense handlers ─────────────────────────────────────────────────────
+  const resetAllPaid = () => {
+    setPaidMembers({})
+    showToast('All settlements reset')
+  }
+
+  const paidCount = Object.values(paidMembers).filter(Boolean).length
+
+  // ── Expense form ──
   const validateExp = () => {
     const errs = {}
-    if (!expForm.title.trim()) errs.title = 'Title required'
+    if (!expForm.title.trim())                         errs.title  = 'Title required'
     if (!expForm.amount || Number(expForm.amount) <= 0) errs.amount = 'Enter valid amount'
-    if (!expForm.date) errs.date = 'Date required'
+    if (!expForm.date)                                  errs.date   = 'Date required'
     setExpErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -200,7 +221,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to delete', 'error') }
   }
 
-  // ── Member handlers ──────────────────────────────────────────────────────
+  // ── Members ──
   const handleAddMember = async (e) => {
     e.preventDefault()
     if (!memberForm.name.trim()) return
@@ -221,7 +242,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to remove member', 'error') }
   }
 
-  // ── Split handlers ───────────────────────────────────────────────────────
+  // ── Splits ──
   const openSplit = async (exp) => {
     setSplitExpense(exp)
     try {
@@ -234,7 +255,7 @@ export default function TripDetail() {
   }
 
   const handleSplitEvenly = () => {
-    if (members.length === 0 || !splitExpense) return
+    if (!members.length || !splitExpense) return
     const each = (Number(splitExpense.amount) / members.length).toFixed(2)
     const newSplits = {}
     members.forEach(m => { newSplits[m.id] = { amount: Number(each), paid: splitAmounts[m.id]?.paid || false } })
@@ -254,7 +275,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to save splits', 'error') }
   }
 
-  // ── PDF Export ───────────────────────────────────────────────────────────
+  // ── PDF Export ──
   const exportPDF = () => {
     if (!trip || !analytics) return
     const doc = new jsPDF()
@@ -262,7 +283,7 @@ export default function TripDetail() {
     doc.text('SpendWise — Trip Report', 14, 20)
     doc.setFontSize(11); doc.setTextColor(80)
     doc.text(`${trip.name} · ${trip.destination}`, 14, 30)
-    doc.text(`Budget: ₹${analytics.budget_limit.toLocaleString('en-IN')}  ·  Spent: ₹${analytics.total_spent.toLocaleString('en-IN')}`, 14, 38)
+    doc.text(`Budget: ${formatINR(analytics.budget_limit)}  ·  Spent: ${formatINR(analytics.total_spent)}  ·  Remaining: ${formatINR(analytics.remaining)}`, 14, 38)
     autoTable(doc, {
       startY: 46,
       head: [['Title', 'Category', 'Amount (₹)', 'Date', 'Notes']],
@@ -277,11 +298,12 @@ export default function TripDetail() {
   }
 
   const alertConfig = {
-    exceeded: { bg: 'bg-red-900/20 border-red-800/40', text: 'text-red-400' },
-    '90': { bg: 'bg-orange-900/20 border-orange-800/40', text: 'text-orange-400' },
-    '80': { bg: 'bg-amber-900/20 border-amber-800/40', text: 'text-amber-400' },
+    exceeded: { bg: 'bg-red-900/20 border-red-800/40',    text: 'text-red-400' },
+    '90':     { bg: 'bg-orange-900/20 border-orange-800/40', text: 'text-orange-400' },
+    '80':     { bg: 'bg-amber-900/20 border-amber-800/40',  text: 'text-amber-400' },
   }
 
+  // ── Loading ──
   if (loading) return (
     <div className={`flex ${bg} min-h-screen ${tp}`}>
       <Navbar />
@@ -295,15 +317,15 @@ export default function TripDetail() {
   )
 
   const alertLevel = analytics?.alert?.level
-  const expenses = trip?.expenses || []
-  const dailyData = analytics?.daily_timeline?.map(d => ({ ...d, date: formatDate(d.date) })) || []
+  const expenses   = trip?.expenses || []
+  const dailyData  = analytics?.daily_timeline?.map(d => ({ ...d, date: formatDate(d.date) })) || []
 
   return (
     <div className={`flex ${bg} min-h-screen ${tp}`}>
       <Navbar />
       <main className="md:ml-56 flex-1 pb-24 md:pb-0">
 
-        {/* Toast */}
+        {/* ── Toast ── */}
         {toast && (
           <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium
             ${toast.type === 'error' ? 'bg-red-600' : toast.type === 'warning' ? 'bg-amber-600' : 'bg-emerald-600'} text-white`}>
@@ -311,7 +333,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* Edit Budget Modal */}
+        {/* ── Edit Budget Modal ── */}
         {showEditBudget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className={`${modalBg} border rounded-2xl p-6 w-full max-w-sm shadow-2xl`}>
@@ -322,13 +344,12 @@ export default function TripDetail() {
                 </button>
               </div>
               <p className={`text-xs ${tm} mb-4`}>
-                Current budget: <span className="text-emerald-400 font-semibold">{formatINR(trip?.budget_limit)}</span>
+                Current: <span className="text-emerald-400 font-semibold">{formatINR(trip?.budget_limit)}</span>
               </p>
               <div className="mb-5">
                 <label className={`text-xs font-medium ${tm} mb-1.5 block`}>New Budget (₹)</label>
                 <input
-                  type="number"
-                  min="1"
+                  type="number" min="1"
                   value={newBudget}
                   onChange={e => setNewBudget(e.target.value)}
                   placeholder="e.g. 50000"
@@ -337,33 +358,27 @@ export default function TripDetail() {
                 />
               </div>
               <div className="flex gap-3">
-                <button
-                  onClick={() => setShowEditBudget(false)}
-                  className={`flex-1 border ${border} ${tm} py-2.5 rounded-xl text-sm ${hov} transition-colors`}
-                >
+                <button onClick={() => setShowEditBudget(false)}
+                  className={`flex-1 border ${border} ${tm} py-2.5 rounded-xl text-sm ${hov} transition-colors`}>
                   Cancel
                 </button>
-                <button
-                  onClick={handleSaveBudget}
-                  disabled={savingBudget}
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-                >
+                <button onClick={handleSaveBudget} disabled={savingBudget}
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors">
                   {savingBudget
                     ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving…</>
-                    : <><Check size={14} /> Save Budget</>
-                  }
+                    : <><Check size={14} /> Save Budget</>}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Delete Confirm */}
+        {/* ── Delete Confirm ── */}
         {deleteId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className={`${modalBg} border rounded-2xl p-6 w-full max-w-sm shadow-2xl`}>
               <p className={`font-semibold ${tp} mb-2`}>Delete this expense?</p>
-              <p className={`text-sm ${tm} mb-5`}>This action cannot be undone.</p>
+              <p className={`text-sm ${tm} mb-5`}>This cannot be undone.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className={`flex-1 border ${border} ${tm} py-2.5 rounded-xl text-sm ${hov}`}>Cancel</button>
                 <button onClick={() => handleDeleteExpense(deleteId)} className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-sm">Delete</button>
@@ -372,7 +387,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* Split Modal */}
+        {/* ── Split Modal ── */}
         {showSplit && splitExpense && (
           <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className={`${modalBg} border rounded-t-3xl md:rounded-2xl w-full md:max-w-md max-h-[90vh] overflow-y-auto shadow-2xl`}>
@@ -385,9 +400,7 @@ export default function TripDetail() {
               </div>
               <div className="p-5 space-y-4">
                 {members.length === 0 ? (
-                  <div className={`text-center py-6 ${tm} text-sm`}>
-                    No members added yet. Go to Split & Settle tab to add members first.
-                  </div>
+                  <p className={`text-sm ${tm} text-center py-6`}>Add members first in the Split & Settle tab.</p>
                 ) : (
                   <>
                     <button onClick={handleSplitEvenly}
@@ -432,7 +445,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* Add/Edit Expense Modal */}
+        {/* ── Add/Edit Expense Modal ── */}
         {showAdd && (
           <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className={`${modalBg} border rounded-t-3xl md:rounded-2xl w-full md:max-w-md max-h-[90vh] overflow-y-auto shadow-2xl`}>
@@ -452,8 +465,7 @@ export default function TripDetail() {
                   <div>
                     <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Amount (₹) *</label>
                     <input type="number" min="1" value={expForm.amount}
-                      onChange={e => setExpForm(f => ({ ...f, amount: e.target.value }))}
-                      placeholder="500"
+                      onChange={e => setExpForm(f => ({ ...f, amount: e.target.value }))} placeholder="500"
                       className={`w-full text-sm ${inputBg} border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500`} />
                     {expErrors.amount && <p className="text-red-400 text-xs mt-1">{expErrors.amount}</p>}
                   </div>
@@ -473,8 +485,7 @@ export default function TripDetail() {
                         className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-[10px] font-medium border transition-all ${
                           expForm.category === cat ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' : `${border} ${tm} ${hov}`
                         }`}>
-                        <span>{CAT_ICONS[cat]}</span>
-                        <span>{cat}</span>
+                        <span>{CAT_ICONS[cat]}</span><span>{cat}</span>
                       </button>
                     ))}
                   </div>
@@ -496,7 +507,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* Top Bar */}
+        {/* ── Top Bar ── */}
         <div className={`${topbar} border-b px-4 md:px-6 py-4 flex items-center gap-3 sticky top-0 z-20`}>
           <button onClick={() => navigate('/trips')} className={`${tm} transition-colors`}>
             <ArrowLeft size={18} />
@@ -524,7 +535,7 @@ export default function TripDetail() {
 
         <div className="p-4 md:p-6 space-y-5">
 
-          {/* Alert Banner */}
+          {/* ── Alert Banner ── */}
           {alertLevel && !dismissed && (
             <div className={`rounded-2xl p-4 border flex items-start gap-3 ${alertConfig[alertLevel]?.bg}`}>
               <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${alertConfig[alertLevel]?.text}`} />
@@ -533,13 +544,13 @@ export default function TripDetail() {
             </div>
           )}
 
-          {/* Stat Cards */}
+          {/* ── Stat Cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: 'Total Budget', value: formatINR(analytics?.budget_limit), color: 'text-blue-400', icon: '💼', editable: true },
-              { label: 'Total Spent', value: formatINR(analytics?.total_spent), color: 'text-rose-400', icon: '💸' },
-              { label: 'Remaining', value: formatINR(analytics?.remaining), color: analytics?.remaining < 0 ? 'text-red-400' : 'text-emerald-400', icon: '✅' },
-              { label: 'Daily Average', value: formatINR(analytics?.daily_average), color: 'text-amber-400', icon: '📅' },
+              { label: 'Total Budget',  value: formatINR(analytics?.budget_limit),  color: 'text-blue-400',    icon: '💼', editable: true },
+              { label: 'Total Spent',   value: formatINR(analytics?.total_spent),   color: 'text-rose-400',    icon: '💸' },
+              { label: 'Remaining',     value: formatINR(analytics?.remaining),     color: analytics?.remaining < 0 ? 'text-red-400' : 'text-emerald-400', icon: '✅' },
+              { label: 'Daily Average', value: formatINR(analytics?.daily_average), color: 'text-amber-400',   icon: '📅' },
             ].map(c => (
               <div key={c.label} className={`${card} border rounded-2xl p-4 relative`}>
                 <p className={`text-xs ${tm} mb-2`}>{c.label}</p>
@@ -548,8 +559,8 @@ export default function TripDetail() {
                 {c.editable && (
                   <button
                     onClick={handleEditBudget}
-                    className={`absolute top-3 right-3 ${tm} hover:text-emerald-400 transition-colors`}
                     title="Edit budget"
+                    className={`absolute top-3 right-3 p-1.5 rounded-lg ${tm} hover:text-emerald-400 hover:bg-emerald-500/10 transition-all`}
                   >
                     <Pencil size={13} />
                   </button>
@@ -558,12 +569,17 @@ export default function TripDetail() {
             ))}
           </div>
 
-          {/* Budget Progress */}
+          {/* ── Budget Progress ── */}
           <div className={`${card} border rounded-2xl p-5`}>
             <div className="flex justify-between items-center mb-3">
               <p className={`text-sm font-semibold ${tp}`}>Budget Progress</p>
               <div className="flex items-center gap-2">
-                <span className={`text-sm font-bold ${alertLevel === 'exceeded' ? 'text-red-400' : alertLevel === '90' ? 'text-orange-400' : alertLevel === '80' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                <span className={`text-sm font-bold ${
+                  alertLevel === 'exceeded' ? 'text-red-400'
+                  : alertLevel === '90' ? 'text-orange-400'
+                  : alertLevel === '80' ? 'text-amber-400'
+                  : 'text-emerald-400'
+                }`}>
                   {analytics?.percentage_used}%
                 </span>
                 <button
@@ -575,8 +591,15 @@ export default function TripDetail() {
               </div>
             </div>
             <div className={`h-3 ${dark ? 'bg-[#2a2a2a]' : 'bg-gray-100'} rounded-full overflow-hidden`}>
-              <div className={`h-full rounded-full transition-all duration-700 ${alertLevel === 'exceeded' ? 'bg-red-500' : alertLevel === '90' ? 'bg-orange-500' : alertLevel === '80' ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                style={{ width: `${Math.min(analytics?.percentage_used || 0, 100)}%` }} />
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  alertLevel === 'exceeded' ? 'bg-red-500'
+                  : alertLevel === '90' ? 'bg-orange-500'
+                  : alertLevel === '80' ? 'bg-amber-500'
+                  : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(analytics?.percentage_used || 0, 100)}%` }}
+              />
             </div>
             <div className="flex justify-between text-xs mt-2">
               <span className={tm}>{formatINR(analytics?.total_spent)} spent</span>
@@ -584,11 +607,11 @@ export default function TripDetail() {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2">
+          {/* ── Tabs ── */}
+          <div className="flex gap-2 flex-wrap">
             {[
-              { key: 'expenses', label: '🧾 Expenses' },
-              { key: 'splits', label: '👥 Split & Settle' },
+              { key: 'expenses',  label: '🧾 Expenses' },
+              { key: 'splits',    label: '👥 Split & Settle' },
               { key: 'analytics', label: '📊 Analytics' },
             ].map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -600,7 +623,7 @@ export default function TripDetail() {
             ))}
           </div>
 
-          {/* Expenses Tab */}
+          {/* ── Expenses Tab ── */}
           {activeTab === 'expenses' && (
             <div className={`${card} border rounded-2xl p-5`}>
               <div className="flex items-center justify-between mb-4">
@@ -636,8 +659,7 @@ export default function TripDetail() {
                       </div>
                       <span className={`text-sm font-semibold ${tp} flex-shrink-0`}>-{formatINR(exp.amount)}</span>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                        <button onClick={() => openSplit(exp)} title="Split expense"
-                          className={`${tm} hover:text-emerald-400 transition-colors`}>
+                        <button onClick={() => openSplit(exp)} title="Split" className={`${tm} hover:text-emerald-400 transition-colors`}>
                           <Users size={13} />
                         </button>
                         <button onClick={() => startEdit(exp)} className={`${tm} hover:text-blue-400 transition-colors`}>
@@ -654,15 +676,16 @@ export default function TripDetail() {
             </div>
           )}
 
-          {/* Split & Settle Tab */}
+          {/* ── Split & Settle Tab ── */}
           {activeTab === 'splits' && (
             <div className="space-y-4">
+
               {/* Members */}
               <div className={`${card} border rounded-2xl p-5`}>
                 <div className="flex items-center justify-between mb-4">
                   <p className={`text-sm font-semibold ${tp}`}>Trip Members</p>
                   <button onClick={() => setShowAddMember(!showAddMember)}
-                    className="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl flex items-center gap-1">
+                    className="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors">
                     <Plus size={12} /> Add Member
                   </button>
                 </div>
@@ -680,7 +703,7 @@ export default function TripDetail() {
                 )}
 
                 {members.length === 0 ? (
-                  <p className={`text-sm ${tm} text-center py-4`}>No members yet. Add people to split expenses with them.</p>
+                  <p className={`text-sm ${tm} text-center py-4`}>No members yet. Add people to split expenses.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {members.map(m => (
@@ -705,11 +728,19 @@ export default function TripDetail() {
               <div className={`${card} border rounded-2xl p-5`}>
                 <div className="flex items-center justify-between mb-4">
                   <p className={`text-sm font-semibold ${tp}`}>💰 Settlement Summary</p>
-                  {Object.values(paidMembers).some(Boolean) && (
-                    <span className="text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-800/30 px-2 py-1 rounded-full">
-                      {Object.values(paidMembers).filter(Boolean).length} settled
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {paidCount > 0 && (
+                      <>
+                        <span className="text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-800/30 px-2 py-1 rounded-full">
+                          {paidCount} of {settlement.length} settled
+                        </span>
+                        <button onClick={resetAllPaid}
+                          className={`text-xs border ${border} ${tm} px-2 py-1 rounded-lg ${hov} transition-colors`}>
+                          Reset All
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {settlement.length === 0 ? (
@@ -719,23 +750,24 @@ export default function TripDetail() {
                     {settlement.map(s => {
                       const isPaid = paidMembers[s.member_id] || false
                       return (
-                        <div
-                          key={s.member_id}
-                          className={`flex items-center justify-between p-4 rounded-2xl transition-all ${
+                        <div key={s.member_id}
+                          className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
                             isPaid
-                              ? dark ? 'bg-emerald-900/10 border border-emerald-900/30' : 'bg-emerald-50 border border-emerald-100'
-                              : dark ? 'bg-[#111]' : 'bg-gray-50'
+                              ? dark ? 'bg-emerald-900/10 border-emerald-900/30' : 'bg-emerald-50 border-emerald-100'
+                              : dark ? 'bg-[#111] border-[#1f1f1f]' : 'bg-gray-50 border-gray-100'
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold transition-all ${
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                               isPaid ? 'bg-emerald-500/30 text-emerald-400' : 'bg-emerald-500/20 text-emerald-400'
                             }`}>
                               {isPaid ? '✓' : s.name[0].toUpperCase()}
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className={`text-sm font-semibold ${isPaid ? 'text-emerald-400 line-through opacity-60' : tp}`}>
+                                <p className={`text-sm font-semibold transition-all ${
+                                  isPaid ? 'text-emerald-400 line-through opacity-60' : tp
+                                }`}>
                                   {s.name}
                                 </p>
                                 {isPaid && (
@@ -752,25 +784,30 @@ export default function TripDetail() {
 
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <p className={`text-base font-bold ${isPaid ? 'text-emerald-400 opacity-50' : s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              <p className={`text-base font-bold ${
+                                isPaid ? 'text-emerald-400 opacity-50'
+                                : s.net >= 0 ? 'text-emerald-400'
+                                : 'text-red-400'
+                              }`}>
                                 {s.net >= 0 ? `+${formatINR(s.net)}` : `-${formatINR(Math.abs(s.net))}`}
                               </p>
-                              <p className={`text-xs font-medium ${isPaid ? 'text-emerald-400 opacity-50' : s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {isPaid ? 'settled' : s.net >= 0 ? '← to receive' : '→ to pay'}
+                              <p className={`text-[10px] ${isPaid ? 'text-emerald-400 opacity-50' : s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {isPaid ? 'settled' : s.net >= 0 ? 'to receive' : 'to pay'}
                               </p>
                             </div>
 
-                            {/* Mark as Paid button */}
+                            {/* ── Mark as Paid Button ── */}
                             <button
-                              onClick={() => toggleMemberPaid(s.member_id)}
+                              onClick={() => togglePaid(s.member_id)}
                               title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
-                              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                                 isPaid
-                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                                  : `border-2 ${dark ? 'border-[#3a3a3a] hover:border-emerald-500' : 'border-gray-300 hover:border-emerald-500'} ${tm} hover:text-emerald-400`
+                                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                                  : dark ? 'border-2 border-[#333] text-gray-600 hover:border-emerald-500 hover:text-emerald-400'
+                                  : 'border-2 border-gray-200 text-gray-300 hover:border-emerald-500 hover:text-emerald-400'
                               }`}
                             >
-                              {isPaid ? <CheckCircle size={16} /> : <Circle size={16} />}
+                              {isPaid ? <CheckCircle size={18} /> : <Circle size={18} />}
                             </button>
                           </div>
                         </div>
@@ -780,113 +817,94 @@ export default function TripDetail() {
                 )}
 
                 {settlement.length > 0 && (
-                  <div className={`mt-4 pt-4 border-t ${border} flex items-center justify-between`}>
-                    <p className={`text-xs ${tm}`}>
-                      {Object.values(paidMembers).filter(Boolean).length} of {settlement.length} members settled
-                    </p>
-                    {Object.values(paidMembers).some(Boolean) && (
-                      <button
-                        onClick={() => setPaidMembers({})}
-                        className={`text-xs ${tm} hover:text-red-400 transition-colors`}
-                      >
-                        Reset all
-                      </button>
-                    )}
-                  </div>
+                  <p className={`text-xs ${tm} text-center mt-4`}>
+                    💡 How to split an expense: Go to 🧾 Expenses tab → hover over any expense → click the 👥 split icon
+                  </p>
                 )}
               </div>
-
-              {/* How to split hint */}
-              {members.length > 0 && expenses.length > 0 && (
-                <div className={`${card} border rounded-2xl p-4`}>
-                  <p className={`text-xs font-semibold ${tp} mb-2`}>💡 How to split an expense</p>
-                  <p className={`text-xs ${tm}`}>
-                    Go to <span className="text-emerald-400">🧾 Expenses</span> → hover any expense → click <span className="text-emerald-400">👥</span> → split evenly or enter custom amounts → Save. Then come back here and click ○ to mark someone as settled.
-                  </p>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Analytics Tab */}
+          {/* ── Analytics Tab ── */}
           {activeTab === 'analytics' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className={`${card} border rounded-2xl p-5`}>
-                  <p className={`text-sm font-semibold ${tp} mb-4`}>Daily Spending</p>
-                  {dailyData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={180}>
-                      <AreaChart data={dailyData}>
-                        <defs>
-                          <linearGradient id="tripGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid stroke={dark ? '#1f1f1f' : '#f3f4f6'} strokeDasharray="3 3" />
-                        <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false}
-                          tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v}`} />
-                        <Tooltip contentStyle={tooltip} formatter={v => [formatINR(v), 'Spent']} />
-                        <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} fill="url(#tripGrad)" dot={{ fill: '#10b981', r: 3 }} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className={`h-[180px] flex items-center justify-center text-sm ${tm}`}>No data yet</div>
-                  )}
-                </div>
-
-                <div className={`${card} border rounded-2xl p-5`}>
-                  <p className={`text-sm font-semibold ${tp} mb-4`}>Category Breakdown</p>
-                  {analytics?.category_breakdown?.length > 0 ? (
-                    <div className="flex items-start gap-4">
-                      <ResponsiveContainer width={130} height={130}>
-                        <PieChart>
-                          <Pie data={analytics.category_breakdown} cx="50%" cy="50%"
-                            innerRadius={38} outerRadius={58} dataKey="total" paddingAngle={3}>
-                            {analytics.category_breakdown.map((entry, i) => (
-                              <Cell key={i} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={tooltip} formatter={v => [formatINR(v), '']} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="flex-1 space-y-2">
-                        {analytics.category_breakdown.map(c => (
-                          <div key={c.category}>
-                            <div className="flex justify-between text-xs mb-0.5">
-                              <span className={tm}>{CAT_ICONS[c.category]} {c.category}</span>
-                              <span className={`${tp} font-medium`}>{c.percentage}%</span>
-                            </div>
-                            <div className={`h-1.5 ${dark ? 'bg-[#2a2a2a]' : 'bg-gray-100'} rounded-full overflow-hidden`}>
-                              <div className="h-full rounded-full" style={{ width: `${c.percentage}%`, background: c.color }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={`h-[130px] flex items-center justify-center text-sm ${tm}`}>Add expenses to see breakdown</div>
-                  )}
-                </div>
-              </div>
-
-              <div className={`${card} border rounded-2xl p-5 grid grid-cols-2 md:grid-cols-4 gap-4`}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Trip Days', value: analytics?.days_total, sub: `${analytics?.days_elapsed} elapsed` },
-                  { label: 'Total Expenses', value: analytics?.expense_count, sub: 'transactions' },
-                  { label: 'Daily Average', value: formatINR(analytics?.daily_average), sub: 'per day' },
-                  { label: 'Projected', value: formatINR(analytics?.projected_total), sub: 'by end of trip' },
+                  { label: 'Trip Days',      value: analytics?.days_total,    sub: `${analytics?.days_elapsed} elapsed` },
+                  { label: 'Expenses',       value: analytics?.expense_count, sub: 'transactions' },
+                  { label: 'Daily Average',  value: formatINR(analytics?.daily_average), sub: 'per day' },
+                  { label: 'Projected',      value: formatINR(analytics?.projected_total), sub: 'by end of trip' },
                 ].map(s => (
-                  <div key={s.label} className="text-center">
+                  <div key={s.label} className={`${card} border rounded-2xl p-4 text-center`}>
                     <p className={`text-xl font-bold ${tp}`}>{s.value}</p>
                     <p className={`text-xs ${tm} mt-0.5`}>{s.label}</p>
                     <p className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'} mt-0.5`}>{s.sub}</p>
                   </div>
                 ))}
               </div>
+
+              {/* Daily chart */}
+              <div className={`${card} border rounded-2xl p-5`}>
+                <p className={`text-sm font-semibold ${tp} mb-4`}>Daily Spending</p>
+                {dailyData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={dailyData}>
+                      <defs>
+                        <linearGradient id="tripGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke={dark ? '#1f1f1f' : '#f3f4f6'} strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false}
+                        tickFormatter={v => `₹${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`} />
+                      <Tooltip contentStyle={tooltip} formatter={v => [formatINR(v), 'Spent']} />
+                      <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} fill="url(#tripGrad)" dot={{ fill: '#10b981', r: 3 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className={`h-[180px] flex items-center justify-center text-sm ${tm}`}>No data yet</div>
+                )}
+              </div>
+
+              {/* Category pie */}
+              <div className={`${card} border rounded-2xl p-5`}>
+                <p className={`text-sm font-semibold ${tp} mb-4`}>Category Breakdown</p>
+                {analytics?.category_breakdown?.length > 0 ? (
+                  <div className="flex items-start gap-4">
+                    <ResponsiveContainer width={130} height={130}>
+                      <PieChart>
+                        <Pie data={analytics.category_breakdown} cx="50%" cy="50%"
+                          innerRadius={38} outerRadius={58} dataKey="total" paddingAngle={3}>
+                          {analytics.category_breakdown.map((entry, i) => (
+                            <Cell key={i} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={tooltip} formatter={v => [formatINR(v), '']} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex-1 space-y-2">
+                      {analytics.category_breakdown.map(c => (
+                        <div key={c.category}>
+                          <div className="flex justify-between text-xs mb-0.5">
+                            <span className={tm}>{CAT_ICONS[c.category]} {c.category}</span>
+                            <span className={`${tp} font-medium`}>{c.percentage}%</span>
+                          </div>
+                          <div className={`h-1.5 ${dark ? 'bg-[#2a2a2a]' : 'bg-gray-100'} rounded-full overflow-hidden`}>
+                            <div className="h-full rounded-full" style={{ width: `${c.percentage}%`, background: c.color }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`h-[130px] flex items-center justify-center text-sm ${tm}`}>Add expenses to see breakdown</div>
+                )}
+              </div>
             </div>
           )}
+
         </div>
       </main>
     </div>
