@@ -10,6 +10,7 @@ from app.database import Base, engine
 from app.routes import auth, expenses, ocr
 from app.routes.trips import router as trips_router
 from app.routes.splits import router as splits_router
+from app.routes.wallet import router as wallet_router  # ← NEW
 
 Base.metadata.create_all(bind=engine)
 
@@ -43,6 +44,7 @@ app.include_router(expenses.router)
 app.include_router(ocr.router)
 app.include_router(trips_router)
 app.include_router(splits_router)
+app.include_router(wallet_router)  # ← NEW
 
 @app.get("/")
 def root():

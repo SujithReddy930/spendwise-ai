@@ -31,6 +31,7 @@ class Trip(Base):
 
     expenses = relationship("TripExpense", back_populates="trip", cascade="all, delete-orphan")
     members = relationship("TripMember", back_populates="trip", cascade="all, delete-orphan")
+    wallet = relationship("TripWallet", back_populates="trip", uselist=False, cascade="all, delete-orphan")  # ← NEW
 
 
 class TripExpense(Base):
@@ -62,6 +63,7 @@ class TripMember(Base):
 
     trip = relationship("Trip", back_populates="members")
     splits = relationship("ExpenseSplit", back_populates="member", cascade="all, delete-orphan")
+    deposits = relationship("WalletDeposit", back_populates="member", cascade="all, delete-orphan")  # ← NEW
 
 
 class ExpenseSplit(Base):

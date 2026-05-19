@@ -3,6 +3,7 @@
  *   - Edit Budget (pencil icon on Total Budget card + Budget Progress bar)
  *   - Mark as Paid (circle button on each settlement member row)
  *   - Split expenses, add/edit/delete expenses, members, analytics
+ *   - Open Wallet button in top bar
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -10,7 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Plus, Trash2, X, Download, FileText,
   RefreshCw, Edit2, Check, AlertTriangle, Users,
-  Pencil, CheckCircle, Circle,
+  Pencil, CheckCircle, Circle, Wallet,                // ← NEW: Wallet icon
 } from 'lucide-react'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -168,7 +169,7 @@ export default function TripDetail() {
   // ── Expense form ──
   const validateExp = () => {
     const errs = {}
-    if (!expForm.title.trim())                         errs.title  = 'Title required'
+    if (!expForm.title.trim())                          errs.title  = 'Title required'
     if (!expForm.amount || Number(expForm.amount) <= 0) errs.amount = 'Enter valid amount'
     if (!expForm.date)                                  errs.date   = 'Date required'
     setExpErrors(errs)
@@ -298,9 +299,9 @@ export default function TripDetail() {
   }
 
   const alertConfig = {
-    exceeded: { bg: 'bg-red-900/20 border-red-800/40',    text: 'text-red-400' },
+    exceeded: { bg: 'bg-red-900/20 border-red-800/40',       text: 'text-red-400' },
     '90':     { bg: 'bg-orange-900/20 border-orange-800/40', text: 'text-orange-400' },
-    '80':     { bg: 'bg-amber-900/20 border-amber-800/40',  text: 'text-amber-400' },
+    '80':     { bg: 'bg-amber-900/20 border-amber-800/40',   text: 'text-amber-400' },
   }
 
   // ── Loading ──
@@ -517,6 +518,15 @@ export default function TripDetail() {
             <p className={`text-xs ${tm}`}>{trip?.destination}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* ── Open Wallet Button ── */}                                                                   {/* ← NEW */}
+            <button                                                                                             /* ← NEW */
+              onClick={() => navigate(`/trips/${id}/wallet`)}                                                  /* ← NEW */
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors" /* ← NEW */
+              title="Open Trip Wallet"                                                                         /* ← NEW */
+            >                                                                                                  {/* ← NEW */}
+              <Wallet size={12} /> Wallet                                                                      {/* ← NEW */}
+            </button>                                                                                          {/* ← NEW */}
+
             <CSVLink data={expenses} filename={`trip-${trip?.name?.replace(/\s+/g, '-')}.csv`}
               className={`text-xs border ${border} ${tm} ${hov} px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors`}>
               <Download size={12} /> CSV
@@ -724,7 +734,7 @@ export default function TripDetail() {
                 )}
               </div>
 
-              {/* Settlement Summary with Mark as Paid */}
+              {/* Settlement Summary */}
               <div className={`${card} border rounded-2xl p-5`}>
                 <div className="flex items-center justify-between mb-4">
                   <p className={`text-sm font-semibold ${tp}`}>💰 Settlement Summary</p>
@@ -765,9 +775,7 @@ export default function TripDetail() {
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className={`text-sm font-semibold transition-all ${
-                                  isPaid ? 'text-emerald-400 line-through opacity-60' : tp
-                                }`}>
+                                <p className={`text-sm font-semibold transition-all ${isPaid ? 'text-emerald-400 line-through opacity-60' : tp}`}>
                                   {s.name}
                                 </p>
                                 {isPaid && (
@@ -784,19 +792,13 @@ export default function TripDetail() {
 
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <p className={`text-base font-bold ${
-                                isPaid ? 'text-emerald-400 opacity-50'
-                                : s.net >= 0 ? 'text-emerald-400'
-                                : 'text-red-400'
-                              }`}>
+                              <p className={`text-base font-bold ${isPaid ? 'text-emerald-400 opacity-50' : s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                 {s.net >= 0 ? `+${formatINR(s.net)}` : `-${formatINR(Math.abs(s.net))}`}
                               </p>
                               <p className={`text-[10px] ${isPaid ? 'text-emerald-400 opacity-50' : s.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                 {isPaid ? 'settled' : s.net >= 0 ? 'to receive' : 'to pay'}
                               </p>
                             </div>
-
-                            {/* ── Mark as Paid Button ── */}
                             <button
                               onClick={() => togglePaid(s.member_id)}
                               title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
@@ -818,10 +820,24 @@ export default function TripDetail() {
 
                 {settlement.length > 0 && (
                   <p className={`text-xs ${tm} text-center mt-4`}>
-                    💡 How to split an expense: Go to 🧾 Expenses tab → hover over any expense → click the 👥 split icon
+                    💡 Go to 🧾 Expenses → hover any expense → click 👥 to split
                   </p>
                 )}
               </div>
+
+              {/* Open Wallet CTA */}                                                                          {/* ← NEW */}
+              <div className={`${card} border rounded-2xl p-4 flex items-center justify-between`}>             {/* ← NEW */}
+                <div>                                                                                           {/* ← NEW */}
+                  <p className={`text-sm font-semibold ${tp}`}>💳 Trip Wallet</p>                              {/* ← NEW */}
+                  <p className={`text-xs ${tm} mt-0.5`}>Manage deposits, wallet balance & payments</p>        {/* ← NEW */}
+                </div>                                                                                          {/* ← NEW */}
+                <button                                                                                         /* ← NEW */
+                  onClick={() => navigate(`/trips/${id}/wallet`)}                                              /* ← NEW */
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 transition-colors flex-shrink-0" /* ← NEW */
+                >                                                                                               {/* ← NEW */}
+                  <Wallet size={13} /> Open Wallet                                                             {/* ← NEW */}
+                </button>                                                                                       {/* ← NEW */}
+              </div>                                                                                            {/* ← NEW */}
             </div>
           )}
 
@@ -830,10 +846,10 @@ export default function TripDetail() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Trip Days',      value: analytics?.days_total,    sub: `${analytics?.days_elapsed} elapsed` },
-                  { label: 'Expenses',       value: analytics?.expense_count, sub: 'transactions' },
-                  { label: 'Daily Average',  value: formatINR(analytics?.daily_average), sub: 'per day' },
-                  { label: 'Projected',      value: formatINR(analytics?.projected_total), sub: 'by end of trip' },
+                  { label: 'Trip Days',     value: analytics?.days_total,          sub: `${analytics?.days_elapsed} elapsed` },
+                  { label: 'Expenses',      value: analytics?.expense_count,       sub: 'transactions' },
+                  { label: 'Daily Average', value: formatINR(analytics?.daily_average),   sub: 'per day' },
+                  { label: 'Projected',     value: formatINR(analytics?.projected_total), sub: 'by end of trip' },
                 ].map(s => (
                   <div key={s.label} className={`${card} border rounded-2xl p-4 text-center`}>
                     <p className={`text-xl font-bold ${tp}`}>{s.value}</p>
