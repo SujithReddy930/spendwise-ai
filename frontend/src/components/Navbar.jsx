@@ -33,7 +33,6 @@ export default function Navbar() {
     { name: 'Add Expense', path: '/add', icon: PlusCircle },
     { name: 'Transactions', path: '/transactions', icon: History },
     { name: 'Trips', path: '/trips', icon: Plane },
-    { name: 'Insights', path: '/analytics', icon: Brain },
   ]
 
   const bg = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
