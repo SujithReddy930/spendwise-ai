@@ -118,7 +118,7 @@ export default function Navbar() {
             </button>
           </div>
         )}
-        <div className="h-20 flex items-center justify-around px-2">
+        <div className="h-20 flex items-center justify-around px-2 w-full">
           {mobileLinks.map((link) => {
             const Icon = link.icon
             const active = pathname === link.path || pathname.startsWith(link.path + '/')
@@ -130,8 +130,13 @@ export default function Navbar() {
               </Link>
             )
           })}
-          <button onClick={() => setShowMobileMenu(v => !v)}
-            className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg ${showMobileMenu ? 'text-emerald-400' : textMuted}`}>
+          <button
+            onClick={() => setShowMobileMenu(v => !v)}
+            className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg ${showMobileMenu ? 'text-emerald-400' : textMuted}`}
+          >
+            <User size={20} />
+            <span className="text-[9px]">More</span>
+          </button>
             <User size={20} />
             <span className="text-[9px]">More</span>
           </button>
