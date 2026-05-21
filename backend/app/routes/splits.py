@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+﻿from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import SessionLocal
@@ -37,7 +37,7 @@ def get_trip_or_404(trip_id: int, user_id: int, db: Session) -> Trip:
     return trip
 
 
-# ── Members ──────────────────────────────────────────────────────────────────
+# -- Members ------------------------------------------------------------------
 
 @router.post("/{trip_id}/members", status_code=201)
 def add_member(
@@ -83,7 +83,7 @@ def delete_member(
     db.commit()
 
 
-# ── Splits ────────────────────────────────────────────────────────────────────
+# -- Splits -------------------------------------------------------------------
 
 @router.post("/{trip_id}/expenses/{expense_id}/splits", status_code=201)
 def add_splits(
@@ -150,12 +150,51 @@ def mark_paid(
     split = db.query(ExpenseSplit).filter(ExpenseSplit.id == split_id).first()
     if not split:
         raise HTTPException(status_code=404, detail="Split not found")
+
+    was_paid = split.paid
     split.paid = not split.paid
     db.commit()
-    return {"paid": split.paid}
+
+    new_split = None
+
+    # If we just marked as PAID, check if there is remaining balance unpaid
+    if split.paid and not was_paid:
+        all_splits = db.query(ExpenseSplit).filter(
+            ExpenseSplit.trip_expense_id == expense_id
+        ).all()
+
+        expense = db.query(TripExpense).filter(TripExpense.id == expense_id).first()
+        total_expense = expense.amount if expense else 0
+        total_split_amount = sum(s.amount for s in all_splits)
+        total_paid = sum(s.amount for s in all_splits if s.paid)
+        remaining = round(total_expense - total_paid, 2)
+
+        # If there is still an unpaid balance, create a new split for it
+        if remaining > 0:
+            new_split = ExpenseSplit(
+                trip_expense_id=expense_id,
+                member_id=split.member_id,
+                amount=remaining,
+                paid=False,
+            )
+            db.add(new_split)
+            db.commit()
+            db.refresh(new_split)
+
+    response = {"paid": split.paid}
+    if new_split:
+        response["new_split_created"] = {
+            "id": new_split.id,
+            "member_id": new_split.member_id,
+            "amount": new_split.amount,
+            "paid": new_split.paid,
+            "message": f"New split of ₹{new_split.amount} created for remaining balance",
+        }
+
+    return response
 
 
-# ── Settlement Summary ────────────────────────────────────────────────────────
+# -- Settlement Summary -------------------------------------------------------
 
 @router.get("/{trip_id}/settlement")
 def get_settlement(

@@ -22,52 +22,73 @@ const CATEGORY_ICONS = {
 }
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
 ]
 
+// ── Safe helpers ─────────────────────────────────────────────────────────────
+const safeNum = (v, fallback = null) =>
+  v != null && !isNaN(Number(v)) ? Number(v) : fallback
+
+// Pull predicted_total from whatever shape the API returns
+const extractPredictedTotal = (data) => {
+  if (!data || data.error) return null
+  return safeNum(
+    data.predicted_total ??
+    data.predictedTotal ??
+    data.amount ??
+    data.total ??
+    data.forecast
+  )
+}
+
+const extractConfidence = (data) => {
+  if (!data || data.error) return null
+  const c = data.confidence ?? data.level ?? data.confidence_level ?? null
+  return typeof c === 'string' ? c : null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { dark } = useTheme()
   const now = new Date()
 
-  // ── Selected month/year ──
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
-  const [selYear, setSelYear] = useState(now.getFullYear())
+  const [selYear,  setSelYear]  = useState(now.getFullYear())
   const [showPicker, setShowPicker] = useState(false)
   const [pickerYear, setPickerYear] = useState(now.getFullYear())
 
-  // ── Data ──
-  const [expenses, setExpenses] = useState([])
-  const [insights, setInsights] = useState([])
+  const [expenses,        setExpenses]        = useState([])
+  const [insights,        setInsights]        = useState([])
   const [insightsLoading, setInsightsLoading] = useState(false)
-  const [prediction, setPrediction] = useState(null)
-  const [search, setSearch] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('All')
-  const [budget, setBudget] = useState(() => Number(localStorage.getItem('budget')) || 30000)
-  const [alertDismissed, setAlertDismissed] = useState(false)
+  const [prediction,      setPrediction]      = useState(null)
+  const [search,          setSearch]          = useState('')
+  const [categoryFilter,  setCategoryFilter]  = useState('All')
+  const [budget,          setBudget]          = useState(() => Number(localStorage.getItem('budget')) || 30000)
+  const [alertDismissed,  setAlertDismissed]  = useState(false)
 
-  const monthLabel = `${MONTH_NAMES[selMonth - 1]} ${selYear}`
+  const monthLabel    = `${MONTH_NAMES[selMonth - 1]} ${selYear}`
   const isCurrentMonth = selMonth === now.getMonth() + 1 && selYear === now.getFullYear()
 
-  // ── Theme helpers ──
-  const bg = dark ? 'bg-[#111111]' : 'bg-gray-50'
-  const card = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const topbar = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const textPrimary = dark ? 'text-white' : 'text-gray-800'
-  const textMuted = dark ? 'text-gray-500' : 'text-gray-400'
-  const inputBg = dark ? 'bg-[#111] border-[#2a2a2a] text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'
-  const borderColor = dark ? 'border-[#2a2a2a]' : 'border-gray-200'
-  const hoverBg = dark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-gray-100'
+  // ── Theme shortcuts ───────────────────────────────────────────────────────
+  const bg          = dark ? 'bg-[#111111]'              : 'bg-gray-50'
+  const card        = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
+  const topbar      = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
+  const textPrimary = dark ? 'text-white'                : 'text-gray-800'
+  const textMuted   = dark ? 'text-gray-500'             : 'text-gray-400'
+  const inputBg     = dark ? 'bg-[#111] border-[#2a2a2a] text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'
+  const borderColor = dark ? 'border-[#2a2a2a]'          : 'border-gray-200'
+  const hoverBg     = dark ? 'hover:bg-[#2a2a2a]'        : 'hover:bg-gray-100'
   const tooltipStyle = dark
     ? { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }
-    : { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }
+    : { background: '#fff',    border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }
 
-  // ── Fetchers ──
+  // ── Fetchers ──────────────────────────────────────────────────────────────
   const fetchExpenses = useCallback(async () => {
     try {
       const res = await api.get('/expenses/')
-      setExpenses(res.data)
-    } catch (err) { console.log(err) }
+      setExpenses(Array.isArray(res.data) ? res.data : [])
+    } catch (err) { console.error('fetchExpenses:', err) }
   }, [])
 
   const fetchAI = useCallback(async () => {
@@ -77,9 +98,10 @@ export default function Dashboard() {
         api.get(`/expenses/insights?month=${selMonth}&year=${selYear}`),
         api.get(`/expenses/prediction?month=${selMonth}&year=${selYear}`),
       ])
-      setInsights(insRes.data.insights || [])
-      setPrediction(predRes.data)
-    } catch {
+      setInsights(insRes.data?.insights ?? [])
+      setPrediction(predRes.data ?? null)
+    } catch (err) {
+      console.error('fetchAI:', err)
       setInsights(['Could not load insights. Please try again.'])
       setPrediction(null)
     } finally {
@@ -88,47 +110,41 @@ export default function Dashboard() {
   }, [selMonth, selYear])
 
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
-  useEffect(() => { fetchAI() }, [fetchAI])
-
+  useEffect(() => { fetchAI() },      [fetchAI])
   useEffect(() => {
     window.addEventListener('focus', fetchExpenses)
     return () => window.removeEventListener('focus', fetchExpenses)
   }, [fetchExpenses])
-
   useEffect(() => { localStorage.setItem('budget', budget) }, [budget])
 
-  // ── Month navigation ──
+  // ── Month navigation ──────────────────────────────────────────────────────
   const prevMonth = () => {
     setAlertDismissed(false)
     if (selMonth === 1) { setSelMonth(12); setSelYear(y => y - 1) }
     else setSelMonth(m => m - 1)
   }
-
   const nextMonth = () => {
     if (isCurrentMonth) return
     setAlertDismissed(false)
     if (selMonth === 12) { setSelMonth(1); setSelYear(y => y + 1) }
     else setSelMonth(m => m + 1)
   }
-
   const selectFromPicker = (m) => {
     const future = pickerYear > now.getFullYear() ||
       (pickerYear === now.getFullYear() && m > now.getMonth() + 1)
     if (future) return
-    setSelMonth(m)
-    setSelYear(pickerYear)
-    setShowPicker(false)
-    setAlertDismissed(false)
+    setSelMonth(m); setSelYear(pickerYear)
+    setShowPicker(false); setAlertDismissed(false)
   }
 
-  // ── Delete ──
+  // ── Delete ────────────────────────────────────────────────────────────────
   const deleteExpense = async (id) => {
     if (!confirm('Delete this expense?')) return
     try { await api.delete(`/expenses/${id}`); fetchExpenses() }
-    catch (err) { console.log(err) }
+    catch (err) { console.error(err) }
   }
 
-  // ── Export PDF ──
+  // ── Export PDF ────────────────────────────────────────────────────────────
   const exportPDF = () => {
     const doc = new jsPDF()
     doc.setFontSize(18)
@@ -137,7 +153,7 @@ export default function Dashboard() {
     doc.text(`${monthLabel} · Total: ₹${totalExpenses.toLocaleString('en-IN')}`, 14, 30)
     autoTable(doc, {
       startY: 38,
-      head: [['Title', 'Category', 'Amount (₹)', 'Date']],
+      head: [['Title','Category','Amount (₹)','Date']],
       body: filteredExpenses.map(e => [
         e.title, e.category,
         e.amount.toLocaleString('en-IN'),
@@ -149,31 +165,40 @@ export default function Dashboard() {
     doc.save(`SpendWise-${monthLabel.replace(' ', '-')}.pdf`)
   }
 
-  // ── Derived data ──
+  // ── Derived data ──────────────────────────────────────────────────────────
   const monthExpenses = expenses.filter(e => {
     if (!e.date) return true
     const d = new Date(e.date)
     return d.getMonth() + 1 === selMonth && d.getFullYear() === selYear
   })
-
   const filteredExpenses = monthExpenses.filter(e =>
     e.title.toLowerCase().includes(search.toLowerCase()) &&
     (categoryFilter === 'All' || e.category === categoryFilter)
   )
+  const totalExpenses    = filteredExpenses.reduce((s, e) => s + safeNum(e.amount, 0), 0)
+  const remainingBudget  = budget - totalExpenses
+  const spendingPct      = budget > 0 ? (totalExpenses / budget) * 100 : 0
+  const alertLevel       = spendingPct >= 100 ? 'over' : spendingPct >= 80 ? 'warning' : null
 
-  const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0)
-  const remainingBudget = budget - totalExpenses
-  const spendingPct = budget > 0 ? (totalExpenses / budget) * 100 : 0
-  const alertLevel = spendingPct >= 100 ? 'over' : spendingPct >= 80 ? 'warning' : null
+  // ── Prediction values (never undefined) ──────────────────────────────────
+  const daysInMonth      = new Date(selYear, selMonth, 0).getDate()
+  const daysElapsed      = isCurrentMonth ? now.getDate() : daysInMonth
+  const dailyAvg         = daysElapsed > 0 ? totalExpenses / daysElapsed : 0
+  const linearForecast   = Math.round(dailyAvg * daysInMonth)
 
+  const predictedTotal   = extractPredictedTotal(prediction) ?? linearForecast
+  const confidence       = extractConfidence(prediction)
+  const hasApiPrediction = extractPredictedTotal(prediction) != null
+
+  // ── Chart data ────────────────────────────────────────────────────────────
   const byCategory = {}
-  filteredExpenses.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + e.amount })
+  filteredExpenses.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + safeNum(e.amount, 0) })
   const pieData = Object.entries(byCategory).map(([name, value]) => ({ name, value }))
 
   const byDate = {}
   filteredExpenses.forEach(e => {
     const day = e.date ? new Date(e.date).getDate() : new Date().getDate()
-    byDate[day] = (byDate[day] || 0) + e.amount
+    byDate[day] = (byDate[day] || 0) + safeNum(e.amount, 0)
   })
   const lineData = Object.entries(byDate)
     .sort((a, b) => Number(a[0]) - Number(b[0]))
@@ -181,15 +206,51 @@ export default function Dashboard() {
 
   const categoryBudgets = { Food: 8000, Transport: 5000, Shopping: 6000, Bills: 5000, Other: 6000 }
 
+  // ── Confidence pill colour ────────────────────────────────────────────────
+  const confColor = confidence === 'high'   ? 'text-emerald-400' :
+                    confidence === 'medium' ? 'text-amber-400'   :
+                    confidence === 'low'    ? 'text-red-400'     : textMuted
+
+  // ── Stat cards data ───────────────────────────────────────────────────────
+  const statCards = [
+    {
+      label: 'Total Spent',
+      value: `₹${totalExpenses.toLocaleString('en-IN')}`,
+      sub: `${spendingPct.toFixed(0)}% of budget`,
+      subColor: spendingPct > 80 ? 'text-red-400' : textMuted,
+    },
+    {
+      label: 'Budget Left',
+      value: `₹${Math.abs(remainingBudget).toLocaleString('en-IN')}`,
+      valueColor: remainingBudget < 0 ? 'text-red-400' : 'text-emerald-400',
+      sub: remainingBudget < 0 ? '⚠️ Over budget' : `${MONTH_NAMES[selMonth - 1]} budget`,
+      subColor: textMuted,
+    },
+    {
+      label: 'Transactions',
+      value: filteredExpenses.length,
+      sub: 'This month',
+      subColor: textMuted,
+    },
+    {
+      label: 'AI Predicted',
+      value: `₹${predictedTotal.toLocaleString('en-IN')}`,
+      sub: confidence
+        ? `${confidence} confidence`
+        : hasApiPrediction ? 'Month-end forecast' : 'Linear estimate',
+      subColor: confidence ? confColor : textMuted,
+    },
+  ]
+
   return (
     <div className={`flex ${bg} min-h-screen ${textPrimary}`}>
       <Navbar />
-      <main className="md:ml-56 flex-1 pb-20 md:pb-0">
+      <main className="md:ml-56 flex-1 pb-24 md:pb-6">
 
         {/* ── Top Bar ── */}
-        <div className={`${topbar} border-b ${borderColor} px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20`}>
+        <div className={`${topbar} border-b ${borderColor} px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-2 sticky top-0 z-20`}>
           <div>
-            <h1 className={`text-base font-semibold ${textPrimary}`}>Dashboard</h1>
+            <h1 className={`text-sm sm:text-base font-semibold ${textPrimary}`}>Dashboard</h1>
             <p className={`text-xs ${textMuted} mt-0.5`}>{monthLabel} · AI analysis ready</p>
           </div>
 
@@ -245,7 +306,7 @@ export default function Dashboard() {
                             disabled={future}
                             onClick={() => selectFromPicker(m)}
                             className={`text-xs py-2 rounded-lg font-medium transition-colors ${
-                              future ? 'opacity-25 cursor-not-allowed'
+                              future    ? 'opacity-25 cursor-not-allowed'
                               : selected ? 'bg-emerald-500 text-white'
                               : `${textMuted} ${hoverBg}`
                             }`}
@@ -285,9 +346,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="p-4 md:p-6 space-y-6">
+        <div className="p-4 md:p-6 space-y-5">
 
-          {/* Budget Alert */}
+          {/* ── Budget Alert ── */}
           {alertLevel && !alertDismissed && (
             <div className={`rounded-2xl p-4 flex items-start gap-3 border ${alertLevel === 'over' ? 'bg-red-900/20 border-red-800/40' : 'bg-amber-900/20 border-amber-800/40'}`}>
               <Bell size={16} className={`mt-0.5 flex-shrink-0 ${alertLevel === 'over' ? 'text-red-400' : 'text-amber-400'}`} />
@@ -305,7 +366,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* AI Insights */}
+          {/* ── AI Insights ── */}
           <div className={`rounded-2xl p-4 border ${dark ? 'bg-emerald-900/10 border-emerald-800/30' : 'bg-emerald-50 border-emerald-200'}`}>
             <div className="flex items-start gap-3">
               <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -345,25 +406,22 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Stat Cards */}
+          {/* ── Stat Cards ── */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            {[
-              { label: 'Total Spent', value: `₹${totalExpenses.toLocaleString('en-IN')}`, sub: `${spendingPct.toFixed(0)}% of budget`, subColor: spendingPct > 80 ? 'text-red-400' : textMuted },
-              { label: 'Budget Left', value: `₹${Math.abs(remainingBudget).toLocaleString('en-IN')}`, valueColor: remainingBudget < 0 ? 'text-red-400' : 'text-emerald-400', sub: remainingBudget < 0 ? '⚠️ Over budget' : `${MONTH_NAMES[selMonth - 1]} budget`, subColor: textMuted },
-              { label: 'Transactions', value: filteredExpenses.length, sub: 'This month', subColor: textMuted },
-              { label: 'AI Predicted', value: prediction && !prediction.error ? `₹${prediction.predicted_total?.toLocaleString('en-IN')}` : '—', sub: prediction?.confidence ? `${prediction.confidence} confidence` : 'Month-end forecast', subColor: textMuted },
-            ].map((c, i) => (
+            {statCards.map((c, i) => (
               <div key={i} className={`${card} border rounded-2xl p-4`}>
                 <p className={`text-xs ${textMuted} mb-2`}>{c.label}</p>
-                <p className={`text-2xl font-bold ${c.valueColor || textPrimary}`}>{c.value}</p>
+                <p className={`text-xl sm:text-2xl font-bold truncate ${c.valueColor || textPrimary}`}>{c.value}</p>
                 <p className={`text-xs mt-1 ${c.subColor}`}>{c.sub}</p>
               </div>
             ))}
           </div>
 
-          {/* Charts */}
+          {/* ── Charts ── */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div className={`${card} border rounded-2xl p-5`}>
+
+            {/* Spending over time */}
+            <div className={`${card} border rounded-2xl p-4 sm:p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <p className={`text-sm font-semibold ${textPrimary}`}>Spending over time</p>
                 <span className={`text-xs px-2 py-1 rounded-full ${dark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
@@ -372,10 +430,11 @@ export default function Dashboard() {
               </div>
               {lineData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={180}>
-                  <LineChart data={lineData}>
+                  <LineChart data={lineData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
                     <XAxis dataKey="day" tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v}`} />
-                    <Tooltip contentStyle={tooltipStyle} formatter={v => [`₹${v.toLocaleString('en-IN')}`, 'Spent']} />
+                    <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} width={44}
+                      tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(1)}k` : `₹${v}`} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={v => [`₹${Number(v).toLocaleString('en-IN')}`, 'Spent']} />
                     <Line type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -384,27 +443,30 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className={`${card} border rounded-2xl p-5`}>
+            {/* Category breakdown */}
+            <div className={`${card} border rounded-2xl p-4 sm:p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <p className={`text-sm font-semibold ${textPrimary}`}>Category breakdown</p>
                 <span className={`text-xs px-2 py-1 rounded-full ${dark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>✨ AI-categorized</span>
               </div>
               {pieData.length > 0 ? (
-                <div className="flex items-center gap-4">
-                  <ResponsiveContainer width={130} height={130}>
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} dataKey="value" paddingAngle={3}>
-                        {pieData.map((entry, i) => <Cell key={i} fill={CATEGORY_COLORS[entry.name] || '#6b7280'} />)}
-                      </Pie>
-                      <Tooltip contentStyle={tooltipStyle} formatter={v => [`₹${v.toLocaleString('en-IN')}`, '']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex-1 grid grid-cols-2 gap-1.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-[110px] sm:w-[130px] flex-shrink-0">
+                    <ResponsiveContainer width="100%" height={120}>
+                      <PieChart>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={34} outerRadius={52} dataKey="value" paddingAngle={3}>
+                          {pieData.map((entry, i) => <Cell key={i} fill={CATEGORY_COLORS[entry.name] || '#6b7280'} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={v => [`₹${Number(v).toLocaleString('en-IN')}`, '']} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex-1 grid grid-cols-2 gap-1.5 min-w-0">
                     {pieData.map(d => (
-                      <div key={d.name} className={`flex items-center gap-1.5 ${dark ? 'bg-[#111]' : 'bg-gray-50'} rounded-lg px-2 py-1.5`}>
+                      <div key={d.name} className={`flex items-center gap-1.5 ${dark ? 'bg-[#111]' : 'bg-gray-50'} rounded-lg px-2 py-1.5 min-w-0`}>
                         <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: CATEGORY_COLORS[d.name] || '#6b7280' }} />
                         <span className={`text-[10px] ${textMuted} flex-1 truncate`}>{d.name}</span>
-                        <span className={`text-[10px] font-medium ${textPrimary}`}>
+                        <span className={`text-[10px] font-medium ${textPrimary} flex-shrink-0`}>
                           {totalExpenses > 0 ? Math.round(d.value / totalExpenses * 100) : 0}%
                         </span>
                       </div>
@@ -417,17 +479,19 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Transactions + Budget */}
+          {/* ── Transactions + Budget ── */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div className={`${card} border rounded-2xl p-5`}>
-              <div className="flex items-center justify-between mb-4">
+
+            {/* Transactions */}
+            <div className={`${card} border rounded-2xl p-4 sm:p-5`}>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <p className={`text-sm font-semibold ${textPrimary}`}>Recent transactions</p>
                 <div className="flex items-center gap-2">
                   <input type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
                     className={`text-xs ${inputBg} border rounded-lg px-3 py-1.5 w-24 focus:outline-none focus:ring-1 focus:ring-emerald-500`} />
                   <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
                     className={`text-xs ${inputBg} border rounded-lg px-2 py-1.5 focus:outline-none`}>
-                    {['All', 'Food', 'Transport', 'Shopping', 'Bills', 'Health', 'Entertainment', 'Education', 'Other'].map(c => (
+                    {['All','Food','Transport','Shopping','Bills','Health','Entertainment','Education','Other'].map(c => (
                       <option key={c}>{c}</option>
                     ))}
                   </select>
@@ -456,7 +520,7 @@ export default function Dashboard() {
                         {exp.is_recurring && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/40 text-blue-400">🔄</span>}
                       </div>
                     </div>
-                    <span className={`text-sm font-semibold ${textPrimary} flex-shrink-0`}>-₹{exp.amount.toLocaleString('en-IN')}</span>
+                    <span className={`text-sm font-semibold ${textPrimary} flex-shrink-0`}>-₹{safeNum(exp.amount, 0).toLocaleString('en-IN')}</span>
                     <button onClick={() => deleteExpense(exp.id)} className={`${textMuted} hover:text-red-400 transition-colors flex-shrink-0`}>
                       <Trash2 size={14} />
                     </button>
@@ -465,7 +529,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className={`${card} border rounded-2xl p-5`}>
+            {/* Budget tracker */}
+            <div className={`${card} border rounded-2xl p-4 sm:p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <p className={`text-sm font-semibold ${textPrimary}`}>Budget tracker</p>
                 <span className={`text-xs px-2 py-1 rounded-full ${dark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>{monthLabel}</span>
@@ -495,6 +560,8 @@ export default function Dashboard() {
                   )
                 }) : <p className={`text-xs ${textMuted} text-center py-4`}>Add expenses to see budget breakdown</p>}
               </div>
+
+              {/* Prediction footer */}
               <div className={`border-t ${borderColor} pt-3`}>
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className={textMuted}>Overall budget</span>
@@ -504,16 +571,21 @@ export default function Dashboard() {
                   <div className="h-full rounded-full transition-all"
                     style={{ width: `${Math.min(spendingPct, 100)}%`, background: spendingPct > 100 ? '#ef4444' : '#10b981' }} />
                 </div>
-                {prediction && !prediction.error && (
-                  <p className={`mt-3 text-xs text-center ${textMuted}`}>
-                    🔮 AI predicts ₹{prediction.predicted_total?.toLocaleString('en-IN')} by month end
-                    · <span className="text-emerald-400 capitalize">{prediction.confidence}</span> confidence
-                  </p>
-                )}
+                <p className={`mt-3 text-xs text-center ${textMuted}`}>
+                  🔮 AI predicts{' '}
+                  <span className={textPrimary}>₹{predictedTotal.toLocaleString('en-IN')}</span>
+                  {' '}by month end
+                  {confidence && (
+                    <> · <span className={`capitalize ${confColor}`}>{confidence}</span> confidence</>
+                  )}
+                  {!confidence && !hasApiPrediction && (
+                    <> · <span className={textMuted}>linear estimate</span></>
+                  )}
+                </p>
               </div>
             </div>
-          </div>
 
+          </div>
         </div>
       </main>
     </div>

@@ -78,3 +78,21 @@ class ExpenseSplit(Base):
 
     member = relationship("TripMember", back_populates="splits")
     expense = relationship("TripExpense", back_populates="splits")
+
+class TripExpenseHistory(Base):
+    __tablename__ = "trip_expense_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    trip_id = Column(Integer, ForeignKey("trips.id"), nullable=False, index=True)
+    expense_id = Column(Integer, nullable=True)
+    action = Column(String(20), nullable=False)  # "added", "updated", "deleted"
+    title = Column(String(200), nullable=True)
+    old_amount = Column(Float, nullable=True)
+    new_amount = Column(Float, nullable=True)
+    old_category = Column(String(100), nullable=True)
+    new_category = Column(String(100), nullable=True)
+    old_notes = Column(Text, nullable=True)
+    new_notes = Column(Text, nullable=True)
+    changed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    trip = relationship("Trip", backref="expense_history")

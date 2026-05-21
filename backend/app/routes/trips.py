@@ -1,6 +1,5 @@
-"""
-Trip Expense Routes — complete with members, splits, settlement, budget patch.
-Uses same auth pattern as expenses.py: decode_token from Authorization header.
+﻿"""
+Trip Expense Routes - complete with history logging on add/update/delete.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Header
@@ -11,7 +10,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from app.database import SessionLocal
-from app.models.trip import Trip, TripExpense, TripMember, ExpenseSplit
+from app.models.trip import Trip, TripExpense, TripMember, ExpenseSplit, TripExpenseHistory
 from app.schemas.trip_schema import (
     TripCreate, TripUpdate,
     TripExpenseCreate, TripExpenseUpdate,
@@ -32,8 +31,6 @@ CATEGORY_COLORS = {
 }
 
 
-# ── Pydantic schemas ─────────────────────────────────────────────────────────
-
 class BudgetUpdate(BaseModel):
     budget_limit: float
 
@@ -49,8 +46,6 @@ class SplitItem(BaseModel):
 class SplitsPayload(BaseModel):
     splits: list[SplitItem]
 
-
-# ── DB + Auth ────────────────────────────────────────────────────────────────
 
 def get_db():
     db = SessionLocal()
@@ -93,7 +88,7 @@ def build_alert(pct: float) -> AlertStatus:
     elif pct >= 90:
         return AlertStatus(level="90", message=f"90% of your budget is used ({pct:.1f}%). Spend carefully!", percentage=pct)
     elif pct >= 80:
-        return AlertStatus(level="80", message=f"80% of your budget is used ({pct:.1f}%). You're getting close.", percentage=pct)
+        return AlertStatus(level="80", message=f"80% of your budget is used ({pct:.1f}%). You are getting close.", percentage=pct)
     return AlertStatus(level=None, message="Budget is on track.", percentage=pct)
 
 
@@ -118,7 +113,28 @@ def fmt_expense(e: TripExpense) -> dict:
     }
 
 
-# ── Trip CRUD ────────────────────────────────────────────────────────────────
+def log_history(db: Session, trip_id: int, expense_id: Optional[int], action: str,
+                title: Optional[str] = None,
+                old_amount: Optional[float] = None, new_amount: Optional[float] = None,
+                old_category: Optional[str] = None, new_category: Optional[str] = None,
+                old_notes: Optional[str] = None, new_notes: Optional[str] = None):
+    entry = TripExpenseHistory(
+        trip_id=trip_id,
+        expense_id=expense_id,
+        action=action,
+        title=title,
+        old_amount=old_amount,
+        new_amount=new_amount,
+        old_category=old_category,
+        new_category=new_category,
+        old_notes=old_notes,
+        new_notes=new_notes,
+    )
+    db.add(entry)
+    db.commit()
+
+
+# -- Trip CRUD ----------------------------------------------------------------
 
 @router.post("/", status_code=201)
 def create_trip(
@@ -212,7 +228,6 @@ def update_budget(
     if payload.budget_limit <= 0:
         raise HTTPException(status_code=400, detail="Budget must be greater than 0")
     trip.budget_limit = payload.budget_limit
-    # Reset alert flags so they fire again at new thresholds
     trip.alert_80_sent = False
     trip.alert_90_sent = False
     trip.alert_exceeded_sent = False
@@ -232,7 +247,7 @@ def delete_trip(
     db.commit()
 
 
-# ── Trip Expense CRUD ────────────────────────────────────────────────────────
+# -- Trip Expense CRUD (with history logging) ---------------------------------
 
 @router.post("/{trip_id}/expenses", status_code=201)
 def add_expense(
@@ -246,6 +261,15 @@ def add_expense(
     db.add(expense)
     db.commit()
     db.refresh(expense)
+
+    log_history(
+        db, trip_id=trip.id, expense_id=expense.id, action="added",
+        title=expense.title,
+        new_amount=expense.amount,
+        new_category=expense.category,
+        new_notes=expense.notes,
+    )
+
     total = calc_total_spent(trip)
     pct = (total / trip.budget_limit * 100) if trip.budget_limit else 0
     check_and_update_alerts(trip, pct, db)
@@ -282,10 +306,25 @@ def update_expense(
     ).first()
     if not exp:
         raise HTTPException(status_code=404, detail="Expense not found")
+
+    old_amount = exp.amount
+    old_category = exp.category
+    old_notes = exp.notes
+    title = exp.title
+
     for k, v in data.dict(exclude_unset=True).items():
         setattr(exp, k, v)
     db.commit()
     db.refresh(exp)
+
+    log_history(
+        db, trip_id=trip_id, expense_id=exp.id, action="updated",
+        title=data.title or title,
+        old_amount=old_amount, new_amount=exp.amount,
+        old_category=old_category, new_category=exp.category,
+        old_notes=old_notes, new_notes=exp.notes,
+    )
+
     return fmt_expense(exp)
 
 
@@ -304,11 +343,50 @@ def delete_expense(
     ).first()
     if not exp:
         raise HTTPException(status_code=404, detail="Expense not found")
+
+    log_history(
+        db, trip_id=trip_id, expense_id=exp.id, action="deleted",
+        title=exp.title,
+        old_amount=exp.amount,
+        old_category=exp.category,
+        old_notes=exp.notes,
+    )
+
     db.delete(exp)
     db.commit()
 
 
-# ── Members ──────────────────────────────────────────────────────────────────
+# -- Expense History ----------------------------------------------------------
+
+@router.get("/{trip_id}/expenses/history")
+def get_expense_history(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    get_trip_or_404(trip_id, user_id, db)
+    history = db.query(TripExpenseHistory).filter(
+        TripExpenseHistory.trip_id == trip_id
+    ).order_by(TripExpenseHistory.changed_at.desc()).all()
+    return [
+        {
+            "id": h.id,
+            "expense_id": h.expense_id,
+            "action": h.action,
+            "title": h.title,
+            "old_amount": h.old_amount,
+            "new_amount": h.new_amount,
+            "old_category": h.old_category,
+            "new_category": h.new_category,
+            "old_notes": h.old_notes,
+            "new_notes": h.new_notes,
+            "changed_at": h.changed_at.isoformat() if h.changed_at else None,
+        }
+        for h in history
+    ]
+
+
+# -- Members ------------------------------------------------------------------
 
 @router.get("/{trip_id}/members")
 def list_members(
@@ -358,7 +436,7 @@ def delete_member(
     db.commit()
 
 
-# ── Splits ───────────────────────────────────────────────────────────────────
+# -- Splits -------------------------------------------------------------------
 
 @router.get("/{trip_id}/expenses/{expense_id}/splits")
 def get_splits(
@@ -386,7 +464,6 @@ def save_splits(
     user_id: int = Depends(get_current_user_id),
 ):
     get_trip_or_404(trip_id, user_id, db)
-    # Delete existing splits for this expense then re-insert
     db.query(ExpenseSplit).filter(
         ExpenseSplit.trip_expense_id == expense_id
     ).delete()
@@ -403,7 +480,7 @@ def save_splits(
     return {"message": "Splits saved", "count": len(payload.splits)}
 
 
-# ── Settlement ───────────────────────────────────────────────────────────────
+# -- Settlement ---------------------------------------------------------------
 
 @router.get("/{trip_id}/settlement")
 def get_settlement(
@@ -411,10 +488,6 @@ def get_settlement(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    """
-    Returns how much each member owes vs has paid.
-    net > 0 = gets money back, net < 0 = owes money.
-    """
     get_trip_or_404(trip_id, user_id, db)
     members = db.query(TripMember).filter(TripMember.trip_id == trip_id).all()
     result = []
@@ -432,7 +505,7 @@ def get_settlement(
     return result
 
 
-# ── Analytics ────────────────────────────────────────────────────────────────
+# -- Analytics ----------------------------------------------------------------
 
 @router.get("/{trip_id}/analytics")
 def get_trip_analytics(

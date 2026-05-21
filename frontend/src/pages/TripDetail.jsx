@@ -1,5 +1,5 @@
 /**
- * TripDetail.jsx — Full trip page with:
+ * TripDetail.jsx â€” Full trip page with:
  *   - Edit Budget (pencil icon on Total Budget card + Budget Progress bar)
  *   - Partial Payment Settlement (enter how much each person paid)
  *   - Mark as Fully Settled button per member
@@ -32,11 +32,11 @@ const CAT_COLORS = {
   Shopping: '#ec4899', Fuel: '#f59e0b', Entertainment: '#ef4444', Other: '#6b7280',
 }
 const CAT_ICONS = {
-  Food: '🍕', Travel: '✈️', Hotel: '🏨', Shopping: '🛍️',
-  Fuel: '⛽', Entertainment: '🎬', Other: '💳',
+  Food: 'ðŸ•', Travel: 'âœˆï¸', Hotel: 'ðŸ¨', Shopping: 'ðŸ›ï¸',
+  Fuel: 'â›½', Entertainment: 'ðŸŽ¬', Other: 'ðŸ’³',
 }
 
-const formatINR  = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
+const formatINR  = (n) => `â‚¹${Number(n || 0).toLocaleString('en-IN')}`
 const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
 
 export default function TripDetail() {
@@ -54,7 +54,7 @@ export default function TripDetail() {
   const [activeTab,  setActiveTab]  = useState('expenses')
   const prevAlertRef = useRef(null)
 
-  // ── Expense form state ──
+  // â”€â”€ Expense form state â”€â”€
   const [showAdd,   setShowAdd]   = useState(false)
   const [adding,    setAdding]    = useState(false)
   const [editId,    setEditId]    = useState(null)
@@ -62,21 +62,21 @@ export default function TripDetail() {
   const [expForm,   setExpForm]   = useState({ title: '', amount: '', category: 'Other', notes: '', date: '' })
   const [expErrors, setExpErrors] = useState({})
 
-  // ── Split state ──
+  // â”€â”€ Split state â”€â”€
   const [showSplit,    setShowSplit]    = useState(false)
   const [splitExpense, setSplitExpense] = useState(null)
   const [splitAmounts, setSplitAmounts] = useState({})
 
-  // ── Member form state ──
+  // â”€â”€ Member form state â”€â”€
   const [showAddMember, setShowAddMember] = useState(false)
   const [memberForm,    setMemberForm]    = useState({ name: '', email: '' })
 
-  // ── Edit Budget state ──
+  // â”€â”€ Edit Budget state â”€â”€
   const [showEditBudget, setShowEditBudget] = useState(false)
   const [newBudget,      setNewBudget]      = useState('')
   const [savingBudget,   setSavingBudget]   = useState(false)
 
-  // ── Settlement state ──
+  // â”€â”€ Settlement state â”€â”€
   // memberPayments: { [memberId]: { paid: number, fullySettled: boolean, payments: [{amount, note, date}] } }
   const [memberPayments,   setMemberPayments]   = useState({})
   const [showPayModal,     setShowPayModal]      = useState(false)
@@ -84,7 +84,7 @@ export default function TripDetail() {
   const [payAmount,        setPayAmount]         = useState('')
   const [payNote,          setPayNote]           = useState('')
 
-  // ── Theme helpers ──
+  // â”€â”€ Theme helpers â”€â”€
   const bg      = dark ? 'bg-[#0d0d0d]'                    : 'bg-gray-50'
   const card    = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
   const topbar  = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
@@ -100,7 +100,7 @@ export default function TripDetail() {
     ? { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 11 }
     : { background: '#fff',    border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 11 }
 
-  // ── Fetch all data ──
+  // â”€â”€ Fetch all data â”€â”€
   const fetchAll = useCallback(async () => {
     try {
       const [tripRes, analyticsRes, membersRes, settlementRes] = await Promise.all([
@@ -118,7 +118,7 @@ export default function TripDetail() {
       if (newLevel && newLevel !== prevAlertRef.current) {
         prevAlertRef.current = newLevel
         setDismissed(false)
-        const msgs = { '80': '⚠️ 80% of budget used!', '90': '🔴 90% used!', exceeded: '🚨 Budget exceeded!' }
+        const msgs = { '80': 'âš ï¸ 80% of budget used!', '90': 'ðŸ”´ 90% used!', exceeded: 'ðŸš¨ Budget exceeded!' }
         showToast(msgs[newLevel] || '', newLevel === 'exceeded' ? 'error' : 'warning')
       }
     } catch {
@@ -135,7 +135,7 @@ export default function TripDetail() {
     setTimeout(() => setToast(null), 4000)
   }
 
-  // ── Edit Budget ──
+  // â”€â”€ Edit Budget â”€â”€
   const handleEditBudget = () => {
     setNewBudget(String(trip?.budget_limit || ''))
     setShowEditBudget(true)
@@ -151,7 +151,7 @@ export default function TripDetail() {
       await api.patch(`/trips/${id}/budget`, { budget_limit: Number(newBudget) })
       setShowEditBudget(false)
       fetchAll()
-      showToast('Budget updated ✓')
+      showToast('Budget updated âœ“')
     } catch (err) {
       showToast(err?.response?.data?.detail || 'Failed to update budget', 'error')
     } finally {
@@ -159,7 +159,7 @@ export default function TripDetail() {
     }
   }
 
-  // ── Settlement helpers ──
+  // â”€â”€ Settlement helpers â”€â”€
   const getMemberPayment = (memberId) =>
     memberPayments[memberId] || { paid: 0, fullySettled: false, payments: [] }
 
@@ -203,7 +203,7 @@ export default function TripDetail() {
       [payTarget.member_id]: { paid: newPaid, fullySettled, payments: newPayments },
     }))
     setShowPayModal(false)
-    showToast(fullySettled ? `${payTarget.name} fully settled ✓` : `Payment of ${formatINR(amount)} recorded ✓`)
+    showToast(fullySettled ? `${payTarget.name} fully settled âœ“` : `Payment of ${formatINR(amount)} recorded âœ“`)
   }
 
   // Mark fully settled without entering amount
@@ -232,7 +232,7 @@ export default function TripDetail() {
         }],
       },
     }))
-    showToast(`${s.name} marked as fully settled ✓`)
+    showToast(`${s.name} marked as fully settled âœ“`)
   }
 
   const resetAllSettlements = () => {
@@ -245,7 +245,7 @@ export default function TripDetail() {
     return mp.fullySettled || (getAmountOwed(s) > 0 && getRemaining(s) <= 0) || (getAmountOwed(s) === 0)
   }).length
 
-  // ── Expense form ──
+  // â”€â”€ Expense form â”€â”€
   const validateExp = () => {
     const errs = {}
     if (!expForm.title.trim())                          errs.title  = 'Title required'
@@ -269,10 +269,10 @@ export default function TripDetail() {
       const payload = { ...expForm, amount: Number(expForm.amount), date: new Date(expForm.date).toISOString() }
       if (editId) {
         await api.put(`/trips/${id}/expenses/${editId}`, payload)
-        showToast('Expense updated ✓')
+        showToast('Expense updated âœ“')
       } else {
         await api.post(`/trips/${id}/expenses`, payload)
-        showToast('Expense added ✓')
+        showToast('Expense added âœ“')
       }
       setShowAdd(false)
       resetExpForm()
@@ -301,7 +301,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to delete', 'error') }
   }
 
-  // ── Members ──
+  // â”€â”€ Members â”€â”€
   const handleAddMember = async (e) => {
     e.preventDefault()
     if (!memberForm.name.trim()) return
@@ -310,7 +310,7 @@ export default function TripDetail() {
       setMemberForm({ name: '', email: '' })
       setShowAddMember(false)
       fetchAll()
-      showToast('Member added ✓')
+      showToast('Member added âœ“')
     } catch { showToast('Failed to add member', 'error') }
   }
 
@@ -322,7 +322,7 @@ export default function TripDetail() {
     } catch { showToast('Failed to remove member', 'error') }
   }
 
-  // ── Splits ──
+  // â”€â”€ Splits â”€â”€
   const openSplit = async (exp) => {
     setSplitExpense(exp)
     try {
@@ -351,25 +351,25 @@ export default function TripDetail() {
       setShowSplit(false)
       setSplitExpense(null)
       fetchAll()
-      showToast('Splits saved ✓')
+      showToast('Splits saved âœ“')
     } catch { showToast('Failed to save splits', 'error') }
   }
 
-  // ── PDF Export ──
+  // â”€â”€ PDF Export â”€â”€
   const exportPDF = () => {
     if (!trip || !analytics) return
     const doc = new jsPDF()
     doc.setFontSize(20); doc.setTextColor(16, 185, 129)
-    doc.text('SpendWise – Trip Report', 14, 20)
+    doc.text('SpendWise â€“ Trip Report', 14, 20)
     doc.setFontSize(11); doc.setTextColor(80)
-    doc.text(`${trip.name} · ${trip.destination}`, 14, 30)
-    doc.text(`Budget: ${formatINR(analytics.budget_limit)}  ·  Spent: ${formatINR(analytics.total_spent)}  ·  Remaining: ${formatINR(analytics.remaining)}`, 14, 38)
+    doc.text(`${trip.name} Â· ${trip.destination}`, 14, 30)
+    doc.text(`Budget: ${formatINR(analytics.budget_limit)}  Â·  Spent: ${formatINR(analytics.total_spent)}  Â·  Remaining: ${formatINR(analytics.remaining)}`, 14, 38)
     autoTable(doc, {
       startY: 46,
-      head: [['Title', 'Category', 'Amount (₹)', 'Date', 'Notes']],
+      head: [['Title', 'Category', 'Amount (â‚¹)', 'Date', 'Notes']],
       body: (trip.expenses || []).map(e => [
         e.title, e.category, e.amount.toLocaleString('en-IN'),
-        e.date ? new Date(e.date).toLocaleDateString('en-IN') : '–', e.notes || '–',
+        e.date ? new Date(e.date).toLocaleDateString('en-IN') : 'â€“', e.notes || 'â€“',
       ]),
       styles: { fontSize: 9 },
       headStyles: { fillColor: [16, 185, 129] },
@@ -383,14 +383,14 @@ export default function TripDetail() {
     '80':     { bg: 'bg-amber-900/20 border-amber-800/40',   text: 'text-amber-400' },
   }
 
-  // ── Loading ──
+  // â”€â”€ Loading â”€â”€
   if (loading) return (
     <div className={`flex ${bg} min-h-screen ${tp}`}>
       <Navbar />
       <main className="md:ml-56 flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className={`text-sm ${tm}`}>Loading trip…</p>
+          <p className={`text-sm ${tm}`}>Loading tripâ€¦</p>
         </div>
       </main>
     </div>
@@ -405,7 +405,7 @@ export default function TripDetail() {
       <Navbar />
       <main className="md:ml-56 flex-1 pb-24 md:pb-0">
 
-        {/* ── Toast ── */}
+        {/* â”€â”€ Toast â”€â”€ */}
         {toast && (
           <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium
             ${toast.type === 'error' ? 'bg-red-600' : toast.type === 'warning' ? 'bg-amber-600' : 'bg-emerald-600'} text-white`}>
@@ -413,7 +413,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* ── Partial Payment Modal ── */}
+        {/* â”€â”€ Partial Payment Modal â”€â”€ */}
         {showPayModal && payTarget && (
           <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className={`${modalBg} border rounded-t-3xl md:rounded-2xl w-full md:max-w-md shadow-2xl`}>
@@ -448,7 +448,7 @@ export default function TripDetail() {
 
                 {/* Amount input */}
                 <div>
-                  <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Payment Amount (₹) *</label>
+                  <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Payment Amount (â‚¹) *</label>
                   <div className="flex gap-2">
                     <input
                       type="number" min="1"
@@ -473,7 +473,7 @@ export default function TripDetail() {
                   <input
                     value={payNote}
                     onChange={e => setPayNote(e.target.value)}
-                    placeholder="e.g. Cash, UPI, part payment…"
+                    placeholder="e.g. Cash, UPI, part paymentâ€¦"
                     className={`w-full text-sm ${inputBg} border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   />
                 </div>
@@ -485,7 +485,7 @@ export default function TripDetail() {
                     <div className="space-y-1.5">
                       {getMemberPayment(payTarget.member_id).payments.map((p, i) => (
                         <div key={i} className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg ${dark ? 'bg-[#111]' : 'bg-gray-50'}`}>
-                          <span className={tm}>{p.date}{p.note ? ` · ${p.note}` : ''}</span>
+                          <span className={tm}>{p.date}{p.note ? ` Â· ${p.note}` : ''}</span>
                           <span className="text-emerald-400 font-semibold">{formatINR(p.amount)}</span>
                         </div>
                       ))}
@@ -512,7 +512,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* ── Edit Budget Modal ── */}
+        {/* â”€â”€ Edit Budget Modal â”€â”€ */}
         {showEditBudget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className={`${modalBg} border rounded-2xl p-6 w-full max-w-sm shadow-2xl`}>
@@ -526,7 +526,7 @@ export default function TripDetail() {
                 Current: <span className="text-emerald-400 font-semibold">{formatINR(trip?.budget_limit)}</span>
               </p>
               <div className="mb-5">
-                <label className={`text-xs font-medium ${tm} mb-1.5 block`}>New Budget (₹)</label>
+                <label className={`text-xs font-medium ${tm} mb-1.5 block`}>New Budget (â‚¹)</label>
                 <input
                   type="number" min="1"
                   value={newBudget}
@@ -544,7 +544,7 @@ export default function TripDetail() {
                 <button onClick={handleSaveBudget} disabled={savingBudget}
                   className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors">
                   {savingBudget
-                    ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving…</>
+                    ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Savingâ€¦</>
                     : <><Check size={14} /> Save Budget</>}
                 </button>
               </div>
@@ -552,7 +552,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* ── Delete Confirm ── */}
+        {/* â”€â”€ Delete Confirm â”€â”€ */}
         {deleteId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className={`${modalBg} border rounded-2xl p-6 w-full max-w-sm shadow-2xl`}>
@@ -566,14 +566,14 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* ── Split Modal ── */}
+        {/* â”€â”€ Split Modal â”€â”€ */}
         {showSplit && splitExpense && (
           <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className={`${modalBg} border rounded-t-3xl md:rounded-2xl w-full md:max-w-md max-h-[90vh] overflow-y-auto shadow-2xl`}>
               <div className={`flex items-center justify-between p-5 border-b ${border} sticky top-0 bg-inherit z-10`}>
                 <div>
                   <p className={`font-semibold ${tp}`}>Split Expense</p>
-                  <p className={`text-xs ${tm}`}>{splitExpense.title} · {formatINR(splitExpense.amount)}</p>
+                  <p className={`text-xs ${tm}`}>{splitExpense.title} Â· {formatINR(splitExpense.amount)}</p>
                 </div>
                 <button onClick={() => setShowSplit(false)} className={`${tm} hover:text-red-400`}><X size={18} /></button>
               </div>
@@ -584,7 +584,7 @@ export default function TripDetail() {
                   <>
                     <button onClick={handleSplitEvenly}
                       className="w-full text-sm border border-emerald-500 text-emerald-400 py-2.5 rounded-xl hover:bg-emerald-900/20 transition-colors">
-                      ÷ Split Evenly ({formatINR(splitExpense.amount / members.length)} each)
+                      Ã· Split Evenly ({formatINR(splitExpense.amount / members.length)} each)
                     </button>
                     <div className="space-y-3">
                       {members.map(m => (
@@ -624,7 +624,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* ── Add/Edit Expense Modal ── */}
+        {/* â”€â”€ Add/Edit Expense Modal â”€â”€ */}
         {showAdd && (
           <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className={`${modalBg} border rounded-t-3xl md:rounded-2xl w-full md:max-w-md max-h-[90vh] overflow-y-auto shadow-2xl`}>
@@ -642,7 +642,7 @@ export default function TripDetail() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Amount (₹) *</label>
+                    <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Amount (â‚¹) *</label>
                     <input type="number" min="1" value={expForm.amount}
                       onChange={e => setExpForm(f => ({ ...f, amount: e.target.value }))} placeholder="500"
                       className={`w-full text-sm ${inputBg} border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500`} />
@@ -672,13 +672,13 @@ export default function TripDetail() {
                 <div>
                   <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Notes (optional)</label>
                   <input value={expForm.notes} onChange={e => setExpForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="Any notes…"
+                    placeholder="Any notesâ€¦"
                     className={`w-full text-sm ${inputBg} border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500`} />
                 </div>
                 <button type="submit" disabled={adding}
                   className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold text-sm py-3 rounded-xl flex items-center justify-center gap-2 transition-colors">
                   {adding
-                    ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving…</>
+                    ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Savingâ€¦</>
                     : <><Check size={16} /> {editId ? 'Update' : 'Add Expense'}</>}
                 </button>
               </form>
@@ -686,7 +686,7 @@ export default function TripDetail() {
           </div>
         )}
 
-        {/* ── Top Bar ── */}
+        {/* â”€â”€ Top Bar â”€â”€ */}
         <div className={`${topbar} border-b px-4 md:px-6 py-4 flex items-center gap-3 sticky top-0 z-20`}>
           <button onClick={() => navigate('/trips')} className={`${tm} transition-colors`}>
             <ArrowLeft size={18} />
@@ -721,22 +721,22 @@ export default function TripDetail() {
 
         <div className="p-4 md:p-6 space-y-5">
 
-          {/* ── Alert Banner ── */}
+          {/* â”€â”€ Alert Banner â”€â”€ */}
           {alertLevel && !dismissed && (
             <div className={`rounded-2xl p-4 border flex items-start gap-3 ${alertConfig[alertLevel]?.bg}`}>
               <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${alertConfig[alertLevel]?.text}`} />
               <p className={`text-sm font-semibold flex-1 ${alertConfig[alertLevel]?.text}`}>{analytics.alert.message}</p>
-              <button onClick={() => setDismissed(true)} className={`${tm} text-xs`}>✕</button>
+              <button onClick={() => setDismissed(true)} className={`${tm} text-xs`}>âœ•</button>
             </div>
           )}
 
-          {/* ── Stat Cards ── */}
+          {/* â”€â”€ Stat Cards â”€â”€ */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: 'Total Budget',  value: formatINR(analytics?.budget_limit),  color: 'text-blue-400',    icon: '💼', editable: true },
-              { label: 'Total Spent',   value: formatINR(analytics?.total_spent),   color: 'text-rose-400',    icon: '💸' },
-              { label: 'Remaining',     value: formatINR(analytics?.remaining),     color: analytics?.remaining < 0 ? 'text-red-400' : 'text-emerald-400', icon: '✅' },
-              { label: 'Daily Average', value: formatINR(analytics?.daily_average), color: 'text-amber-400',   icon: '📅' },
+              { label: 'Total Budget',  value: formatINR(analytics?.budget_limit),  color: 'text-blue-400',    icon: 'ðŸ’¼', editable: true },
+              { label: 'Total Spent',   value: formatINR(analytics?.total_spent),   color: 'text-rose-400',    icon: 'ðŸ’¸' },
+              { label: 'Remaining',     value: formatINR(analytics?.remaining),     color: analytics?.remaining < 0 ? 'text-red-400' : 'text-emerald-400', icon: 'âœ…' },
+              { label: 'Daily Average', value: formatINR(analytics?.daily_average), color: 'text-amber-400',   icon: 'ðŸ“…' },
             ].map(c => (
               <div key={c.label} className={`${card} border rounded-2xl p-4 relative`}>
                 <p className={`text-xs ${tm} mb-2`}>{c.label}</p>
@@ -755,7 +755,7 @@ export default function TripDetail() {
             ))}
           </div>
 
-          {/* ── Budget Progress ── */}
+          {/* â”€â”€ Budget Progress â”€â”€ */}
           <div className={`${card} border rounded-2xl p-5`}>
             <div className="flex justify-between items-center mb-3">
               <p className={`text-sm font-semibold ${tp}`}>Budget Progress</p>
@@ -793,12 +793,13 @@ export default function TripDetail() {
             </div>
           </div>
 
-          {/* ── Tabs ── */}
+          {/* â”€â”€ Tabs â”€â”€ */}
           <div className="flex gap-2 flex-wrap">
             {[
-              { key: 'expenses',  label: '🧾 Expenses' },
-              { key: 'splits',    label: '👥 Split & Settle' },
-              { key: 'analytics', label: '📊 Analytics' },
+              { key: 'expenses',  label: 'ðŸ§¾ Expenses' },
+              { key: 'splits',    label: 'ðŸ‘¥ Split & Settle' },
+              { key: 'analytics', label: 'ðŸ“Š Analytics' },
+              { key: 'history', label: '📋 History' },
             ].map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
                 className={`text-xs px-3 py-2 rounded-xl transition-colors border ${
@@ -809,7 +810,7 @@ export default function TripDetail() {
             ))}
           </div>
 
-          {/* ── Expenses Tab ── */}
+          {/* â”€â”€ Expenses Tab â”€â”€ */}
           {activeTab === 'expenses' && (
             <div className={`${card} border rounded-2xl p-5`}>
               <div className="flex items-center justify-between mb-4">
@@ -818,7 +819,7 @@ export default function TripDetail() {
               </div>
               {expenses.length === 0 ? (
                 <div className="text-center py-10">
-                  <p className="text-3xl mb-3">🧾</p>
+                  <p className="text-3xl mb-3">ðŸ§¾</p>
                   <p className={`text-sm ${tm} mb-4`}>No expenses yet.</p>
                   <button onClick={() => setShowAdd(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl">
                     + Add First Expense
@@ -830,7 +831,7 @@ export default function TripDetail() {
                     <div key={exp.id} className={`flex items-center gap-3 py-3 border-b ${dark ? 'border-[#1f1f1f]' : 'border-gray-50'} last:border-0 group`}>
                       <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0"
                         style={{ background: (CAT_COLORS[exp.category] || '#6b7280') + '22' }}>
-                        {CAT_ICONS[exp.category] || '💳'}
+                        {CAT_ICONS[exp.category] || 'ðŸ’³'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium ${tp} truncate`}>{exp.title}</p>
@@ -839,7 +840,7 @@ export default function TripDetail() {
                             style={{ background: (CAT_COLORS[exp.category] || '#6b7280') + '22', color: CAT_COLORS[exp.category] || '#6b7280' }}>
                             {exp.category}
                           </span>
-                          <span className={`text-[10px] ${tm}`}>{exp.date ? formatDate(exp.date) : '–'}</span>
+                          <span className={`text-[10px] ${tm}`}>{exp.date ? formatDate(exp.date) : 'â€“'}</span>
                           {exp.notes && <span className={`text-[10px] ${tm} truncate max-w-[100px]`}>{exp.notes}</span>}
                         </div>
                       </div>
@@ -862,7 +863,7 @@ export default function TripDetail() {
             </div>
           )}
 
-          {/* ── Split & Settle Tab ── */}
+          {/* â”€â”€ Split & Settle Tab â”€â”€ */}
           {activeTab === 'splits' && (
             <div className="space-y-4">
 
@@ -910,10 +911,10 @@ export default function TripDetail() {
                 )}
               </div>
 
-              {/* ── Settlement Summary with Partial Payments ── */}
+              {/* â”€â”€ Settlement Summary with Partial Payments â”€â”€ */}
               <div className={`${card} border rounded-2xl p-5`}>
                 <div className="flex items-center justify-between mb-4">
-                  <p className={`text-sm font-semibold ${tp}`}>💰 Settlement Summary</p>
+                  <p className={`text-sm font-semibold ${tp}`}>ðŸ’° Settlement Summary</p>
                   <div className="flex items-center gap-2">
                     {settlement.length > 0 && (
                       <span className={`text-xs px-2 py-1 rounded-full border ${
@@ -962,7 +963,7 @@ export default function TripDetail() {
                                 : mp.paid > 0 ? 'bg-amber-500/20 text-amber-400'
                                 : 'bg-emerald-500/20 text-emerald-400'
                               }`}>
-                                {isSettled ? '✓' : s.name[0].toUpperCase()}
+                                {isSettled ? 'âœ“' : s.name[0].toUpperCase()}
                               </div>
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -982,10 +983,10 @@ export default function TripDetail() {
                                 </div>
                                 <p className={`text-xs ${tm} mt-0.5`}>
                                   {isReceiver
-                                    ? `Paid: ${formatINR(s.total_paid)} · To receive: ${formatINR(s.net)}`
+                                    ? `Paid: ${formatINR(s.total_paid)} Â· To receive: ${formatINR(s.net)}`
                                     : mp.paid > 0
-                                    ? `Paid ${formatINR(mp.paid)} of ${formatINR(owed)} · Remaining: ${formatINR(remaining)}`
-                                    : `Paid: ${formatINR(s.total_paid)} · Owes: ${formatINR(owed)}`
+                                    ? `Paid ${formatINR(mp.paid)} of ${formatINR(owed)} Â· Remaining: ${formatINR(remaining)}`
+                                    : `Paid: ${formatINR(s.total_paid)} Â· Owes: ${formatINR(owed)}`
                                   }
                                 </p>
                               </div>
@@ -1003,7 +1004,7 @@ export default function TripDetail() {
                                     ? `+${formatINR(s.net)}`
                                     : remaining > 0
                                     ? `-${formatINR(remaining)}`
-                                    : `✓ ${formatINR(owed)}`
+                                    : `âœ“ ${formatINR(owed)}`
                                   }
                                 </p>
                                 <p className={`text-[10px] ${tm}`}>
@@ -1070,7 +1071,7 @@ export default function TripDetail() {
 
                 {settlement.length > 0 && (
                   <p className={`text-xs ${tm} text-center mt-4`}>
-                    💡 Use "Enter Payment" to record partial amounts · "Mark Settled" to settle in full
+                    ðŸ’¡ Use "Enter Payment" to record partial amounts Â· "Mark Settled" to settle in full
                   </p>
                 )}
               </div>
@@ -1078,7 +1079,7 @@ export default function TripDetail() {
               {/* Open Wallet CTA */}
               <div className={`${card} border rounded-2xl p-4 flex items-center justify-between`}>
                 <div>
-                  <p className={`text-sm font-semibold ${tp}`}>💳 Trip Wallet</p>
+                  <p className={`text-sm font-semibold ${tp}`}>ðŸ’³ Trip Wallet</p>
                   <p className={`text-xs ${tm} mt-0.5`}>Manage deposits, wallet balance & payments</p>
                 </div>
                 <button
@@ -1091,7 +1092,7 @@ export default function TripDetail() {
             </div>
           )}
 
-          {/* ── Analytics Tab ── */}
+          {/* â”€â”€ Analytics Tab â”€â”€ */}
           {activeTab === 'analytics' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1124,7 +1125,7 @@ export default function TripDetail() {
                       <CartesianGrid stroke={dark ? '#1f1f1f' : '#f3f4f6'} strokeDasharray="3 3" />
                       <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false}
-                        tickFormatter={v => `₹${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`} />
+                        tickFormatter={v => `â‚¹${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`} />
                       <Tooltip contentStyle={tooltip} formatter={v => [formatINR(v), 'Spent']} />
                       <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} fill="url(#tripGrad)" dot={{ fill: '#10b981', r: 3 }} />
                     </AreaChart>
@@ -1168,6 +1169,36 @@ export default function TripDetail() {
                   <div className={`h-[130px] flex items-center justify-center text-sm ${tm}`}>Add expenses to see breakdown</div>
                 )}
               </div>
+            </div>
+          )}
+
+                            )}
+                            {h.action === 'updated' && (
+                              <div className={	ext-xs \ space-y-0.5}>
+                                {h.old_amount !== h.new_amount && h.old_amount != null && (
+                                  <p>Amount: <span className="line-through text-red-400">{formatINR(h.old_amount)}</span> → <span className="text-emerald-400 font-medium">{formatINR(h.new_amount)}</span></p>
+                                )}
+                                {h.old_category !== h.new_category && h.old_category != null && (
+                                  <p>Category: <span className="line-through text-red-400">{h.old_category}</span> → <span className="text-blue-400">{h.new_category}</span></p>
+                                )}
+                                {h.old_notes !== h.new_notes && (
+                                  <p>Notes: <span className="line-through text-red-400">{h.old_notes || 'none'}</span> → <span className="text-blue-400">{h.new_notes || 'none'}</span></p>
+                                )}
+                              </div>
+                            )}
+                            {h.action === 'deleted' && (
+                              <p className={	ext-xs \}>
+                                <span className="text-red-400 font-medium">{formatINR(h.old_amount)}</span>
+                                {h.old_category ? <span> · {h.old_category}</span> : null}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
