@@ -104,7 +104,7 @@ export default function Navbar() {
       </aside>
 
       {/* Mobile Nav */}
-      <nav className={`md:hidden fixed bottom-0 left-0 right-0 ${bg} border-t z-50`}>
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 ${bg} border-t z-50`} style={{paddingBottom: 'env(safe-area-inset-bottom)'}}>
         {showMobileMenu && (
           <div className={`${bg} border-t ${dark ? 'border-[#2a2a2a]' : 'border-gray-200'} px-4 py-3 flex flex-col gap-1`}>
             <button onClick={toggle} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${textMuted} ${hoverBg}`}>
