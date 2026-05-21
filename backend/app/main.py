@@ -29,6 +29,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+	"http://localhost:5174",
         "https://spendwise-ai-smoky.vercel.app",
         "https://spendwise-ai-smoky-five.vercel.app",
         FRONTEND_URL,
