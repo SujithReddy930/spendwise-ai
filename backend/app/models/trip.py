@@ -27,8 +27,6 @@ class Trip(Base):
 
     expenses = relationship("TripExpense", back_populates="trip", cascade="all, delete-orphan")
     members = relationship("TripMember", back_populates="trip", cascade="all, delete-orphan")
-    wallet = relationship("TripWallet", back_populates="trip", uselist=False, cascade="all, delete-orphan")
-
 
 class TripExpense(Base):
     __tablename__ = "trip_expenses"
@@ -93,30 +91,3 @@ class TripExpenseHistory(Base):
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     trip = relationship("Trip", backref="expense_history")
-
-
-# --- WALLET MODEL SKELETONS ---
-
-class TripWallet(Base):
-    __tablename__ = "trip_wallets"
-
-    id = Column(Integer, primary_key=True, index=True)
-    trip_id = Column(Integer, ForeignKey("trips.id"), nullable=False, unique=True, index=True)
-    balance = Column(Float, default=0.0, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    trip = relationship("Trip", back_populates="wallet")
-    deposits = relationship("WalletDeposit", back_populates="wallet", cascade="all, delete-orphan")
-
-
-class WalletDeposit(Base):
-    __tablename__ = "wallet_deposits"
-
-    id = Column(Integer, primary_key=True, index=True)
-    wallet_id = Column(Integer, ForeignKey("trip_wallets.id"), nullable=False, index=True)
-    member_id = Column(Integer, ForeignKey("trip_members.id"), nullable=False, index=True)
-    amount = Column(Float, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    wallet = relationship("TripWallet", back_populates="deposits")
-    member = relationship("TripMember", back_populates="deposits")
