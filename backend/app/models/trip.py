@@ -107,7 +107,6 @@ class TripExpenseHistory(Base):
 class TripWallet(Base):
     __tablename__ = "trip_wallets"
     __table_args__ = {'extend_existing': True}  # ADD THIS LINE
-    ...
 
     id = Column(Integer, primary_key=True, index=True)
     trip_id = Column(Integer, ForeignKey("trips.id"), nullable=False, unique=True, index=True)
@@ -120,6 +119,7 @@ class TripWallet(Base):
 
 class WalletDeposit(Base):
     __tablename__ = "wallet_deposits"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     wallet_id = Column(Integer, ForeignKey("trip_wallets.id"), nullable=False, index=True)
