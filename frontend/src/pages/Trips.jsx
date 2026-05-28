@@ -1,11 +1,16 @@
 /**
  * Trips.jsx — Trip Expense Tracker main page
  * Lists all trips, creation modal, search/filter, quick stats
+ * + Mark as Completed / Cancelled / Active status actions
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, MapPin, Calendar, Wallet, TrendingUp, Trash2, X, ChevronRight, Plane, AlertTriangle } from 'lucide-react'
+import {
+  Plus, Search, MapPin, Calendar, Trash2, X,
+  ChevronRight, Plane, AlertTriangle, MoreVertical,
+  CheckCircle2, XCircle, PlayCircle,
+} from 'lucide-react'
 import Navbar from '../components/Navbar'
 import api from '../api/axios'
 import { useTheme } from '../context/ThemeContext'
@@ -23,7 +28,7 @@ const ALERT_STYLES = {
   null:     { bar: 'bg-emerald-500', text: 'text-emerald-400', banner: '' },
 }
 
-const formatINR = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
+const formatINR  = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
 const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
 export default function Trips() {
@@ -37,6 +42,9 @@ export default function Trips() {
   const [creating, setCreating] = useState(false)
   const [toast, setToast] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
+  const [openMenuId, setOpenMenuId] = useState(null)       // which card's ••• menu is open
+  const [updatingStatus, setUpdatingStatus] = useState(null) // tripId being updated
+  const menuRef = useRef(null)
 
   const [form, setForm] = useState({
     name: '', destination: '', description: '',
@@ -45,15 +53,29 @@ export default function Trips() {
   const [formErrors, setFormErrors] = useState({})
 
   // ── Theme ──
-  const bg       = dark ? 'bg-[#0d0d0d]'         : 'bg-gray-50'
-  const card     = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const topbar   = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const tp       = dark ? 'text-white'            : 'text-gray-900'
-  const tm       = dark ? 'text-gray-400'         : 'text-gray-500'
-  const inputBg  = dark ? 'bg-[#111] border-[#333] text-gray-200 placeholder-gray-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'
-  const modalBg  = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]' : 'bg-white border-gray-200'
-  const border   = dark ? 'border-[#2a2a2a]'     : 'border-gray-200'
-  const hov      = dark ? 'hover:bg-[#252525]'   : 'hover:bg-gray-50'
+  const bg      = dark ? 'bg-[#0d0d0d]'                    : 'bg-gray-50'
+  const card    = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
+  const topbar  = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
+  const tp      = dark ? 'text-white'                       : 'text-gray-900'
+  const tm      = dark ? 'text-gray-400'                    : 'text-gray-500'
+  const inputBg = dark
+    ? 'bg-[#111] border-[#333] text-gray-200 placeholder-gray-600'
+    : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'
+  const modalBg = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
+  const border  = dark ? 'border-[#2a2a2a]'                 : 'border-gray-200'
+  const hov     = dark ? 'hover:bg-[#252525]'               : 'hover:bg-gray-50'
+  const menuBg  = dark ? 'bg-[#222] border-[#333]'          : 'bg-white border-gray-200'
+
+  // ── Close menu on outside click ──
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // ── Data ──
   const fetchTrips = useCallback(async () => {
@@ -72,6 +94,22 @@ export default function Trips() {
     setTimeout(() => setToast(null), 3500)
   }
 
+  // ── Update trip status ──
+  const handleStatusChange = async (tripId, newStatus) => {
+    setOpenMenuId(null)
+    setUpdatingStatus(tripId)
+    try {
+      await api.patch(`/trips/${tripId}/status`, { status: newStatus })
+      setTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: newStatus } : t))
+      const labels = { completed: '✅ Trip marked as completed', cancelled: '🚫 Trip cancelled', active: '▶️ Trip reactivated' }
+      showToast(labels[newStatus] || 'Status updated')
+    } catch (err) {
+      showToast(err?.response?.data?.detail || 'Failed to update status', 'error')
+    } finally {
+      setUpdatingStatus(null)
+    }
+  }
+
   // ── Filtering ──
   const filtered = trips.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -83,14 +121,14 @@ export default function Trips() {
   // ── Form validation ──
   const validateForm = () => {
     const errs = {}
-    if (!form.name.trim())         errs.name        = 'Trip name is required'
-    if (!form.destination.trim())  errs.destination  = 'Destination is required'
+    if (!form.name.trim())        errs.name        = 'Trip name is required'
+    if (!form.destination.trim()) errs.destination = 'Destination is required'
     if (!form.budget_limit || Number(form.budget_limit) <= 0)
-                                   errs.budget_limit = 'Enter a valid budget'
-    if (!form.start_date)          errs.start_date   = 'Start date required'
-    if (!form.end_date)            errs.end_date     = 'End date required'
+                                  errs.budget_limit = 'Enter a valid budget'
+    if (!form.start_date)         errs.start_date  = 'Start date required'
+    if (!form.end_date)           errs.end_date    = 'End date required'
     if (form.start_date && form.end_date && form.end_date < form.start_date)
-                                   errs.end_date     = 'End date must be after start'
+                                  errs.end_date    = 'End date must be after start'
     setFormErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -105,7 +143,7 @@ export default function Trips() {
         ...form,
         budget_limit: Number(form.budget_limit),
         start_date: new Date(form.start_date).toISOString(),
-        end_date: new Date(form.end_date).toISOString(),
+        end_date:   new Date(form.end_date).toISOString(),
       })
       setShowCreate(false)
       setForm({ name: '', destination: '', description: '', budget_limit: '', start_date: '', end_date: '' })
@@ -130,6 +168,34 @@ export default function Trips() {
   const totalBudget = trips.reduce((s, t) => s + t.budget_limit, 0)
   const totalSpent  = trips.reduce((s, t) => s + t.total_spent, 0)
   const activeCount = trips.filter(t => t.status === 'active').length
+
+  // ── Status menu options per current status ──
+  const getMenuOptions = (currentStatus) => {
+    const all = [
+      {
+        status: 'active',
+        label: 'Mark as Active',
+        icon: <PlayCircle size={13} />,
+        color: 'text-emerald-400',
+        hoverBg: dark ? 'hover:bg-emerald-900/20' : 'hover:bg-emerald-50',
+      },
+      {
+        status: 'completed',
+        label: 'Mark as Completed',
+        icon: <CheckCircle2 size={13} />,
+        color: 'text-blue-400',
+        hoverBg: dark ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50',
+      },
+      {
+        status: 'cancelled',
+        label: 'Mark as Cancelled',
+        icon: <XCircle size={13} />,
+        color: 'text-gray-400',
+        hoverBg: dark ? 'hover:bg-gray-800/40' : 'hover:bg-gray-100',
+      },
+    ]
+    return all.filter(o => o.status !== currentStatus)
+  }
 
   return (
     <div className={`flex ${bg} min-h-screen ${tp}`}>
@@ -186,7 +252,6 @@ export default function Trips() {
               </div>
 
               <form onSubmit={handleCreate} className="p-5 space-y-4">
-                {/* Trip Name */}
                 <div>
                   <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Trip Name *</label>
                   <input
@@ -197,8 +262,6 @@ export default function Trips() {
                   />
                   {formErrors.name && <p className="text-red-400 text-xs mt-1">{formErrors.name}</p>}
                 </div>
-
-                {/* Destination */}
                 <div>
                   <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Destination *</label>
                   <input
@@ -209,8 +272,6 @@ export default function Trips() {
                   />
                   {formErrors.destination && <p className="text-red-400 text-xs mt-1">{formErrors.destination}</p>}
                 </div>
-
-                {/* Budget */}
                 <div>
                   <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Total Budget (₹) *</label>
                   <input
@@ -222,8 +283,6 @@ export default function Trips() {
                   />
                   {formErrors.budget_limit && <p className="text-red-400 text-xs mt-1">{formErrors.budget_limit}</p>}
                 </div>
-
-                {/* Dates */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Start Date *</label>
@@ -246,8 +305,6 @@ export default function Trips() {
                     {formErrors.end_date && <p className="text-red-400 text-xs mt-1">{formErrors.end_date}</p>}
                   </div>
                 </div>
-
-                {/* Description */}
                 <div>
                   <label className={`text-xs font-medium ${tm} mb-1.5 block`}>Description (optional)</label>
                   <textarea
@@ -258,17 +315,14 @@ export default function Trips() {
                     className={`w-full text-sm ${inputBg} border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
                   />
                 </div>
-
                 <button
                   type="submit"
                   disabled={creating}
                   className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold text-sm py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
-                  {creating ? (
-                    <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Creating…</>
-                  ) : (
-                    <><Plus size={16} /> Create Trip</>
-                  )}
+                  {creating
+                    ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Creating…</>
+                    : <><Plus size={16} /> Create Trip</>}
                 </button>
               </form>
             </div>
@@ -361,14 +415,34 @@ export default function Trips() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" ref={menuRef}>
               {filtered.map(trip => {
-                const alertStyle = ALERT_STYLES[trip.alert_level] || ALERT_STYLES.null
+                const alertStyle  = ALERT_STYLES[trip.alert_level] || ALERT_STYLES.null
                 const statusStyle = STATUS_COLORS[trip.status] || STATUS_COLORS.active
+                const isUpdating  = updatingStatus === trip.id
+                const menuOptions = getMenuOptions(trip.status)
+
                 return (
-                  <div key={trip.id} className={`${card} border rounded-2xl p-5 group transition-all hover:shadow-lg`}>
+                  <div
+                    key={trip.id}
+                    className={`${card} border rounded-2xl p-5 group transition-all hover:shadow-lg relative ${
+                      trip.status === 'cancelled' ? 'opacity-70' : ''
+                    }`}
+                  >
+                    {/* ── Completed overlay ribbon ── */}
+                    {trip.status === 'completed' && (
+                      <div className="absolute top-3 left-0 bg-blue-500/20 text-blue-400 text-[10px] font-semibold px-3 py-0.5 rounded-r-full border border-blue-500/30 flex items-center gap-1">
+                        <CheckCircle2 size={10} /> Completed
+                      </div>
+                    )}
+                    {trip.status === 'cancelled' && (
+                      <div className="absolute top-3 left-0 bg-gray-500/20 text-gray-400 text-[10px] font-semibold px-3 py-0.5 rounded-r-full border border-gray-500/30 flex items-center gap-1">
+                        <XCircle size={10} /> Cancelled
+                      </div>
+                    )}
+
                     {/* Card Header */}
-                    <div className="flex items-start justify-between mb-3">
+                    <div className={`flex items-start justify-between mb-3 ${trip.status !== 'active' ? 'mt-4' : ''}`}>
                       <div className="flex-1 min-w-0 pr-2">
                         <p className={`font-semibold ${tp} truncate`}>{trip.name}</p>
                         <div className="flex items-center gap-1 mt-1">
@@ -376,41 +450,75 @@ export default function Trips() {
                           <p className={`text-xs ${tm} truncate`}>{trip.destination}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+
+                      {/* ── Actions: status menu + delete ── */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                           {statusStyle.label}
                         </span>
-                        <button
-                          onClick={() => setDeleteId(trip.id)}
-                          className={`${tm} hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100`}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+
+                        {/* ••• Menu */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === trip.id ? null : trip.id) }}
+                            disabled={isUpdating}
+                            className={`${tm} hover:text-white transition-colors p-1 rounded-lg ${hov} ${isUpdating ? 'opacity-40' : ''}`}
+                            title="Change status"
+                          >
+                            {isUpdating
+                              ? <div className="w-3.5 h-3.5 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
+                              : <MoreVertical size={14} />}
+                          </button>
+
+                          {/* Dropdown */}
+                          {openMenuId === trip.id && (
+                            <div className={`absolute right-0 top-8 z-30 ${menuBg} border rounded-xl shadow-2xl overflow-hidden min-w-[170px]`}>
+                              <p className={`text-[10px] font-semibold ${tm} px-3 pt-2.5 pb-1 uppercase tracking-wide`}>Change Status</p>
+                              {menuOptions.map(opt => (
+                                <button
+                                  key={opt.status}
+                                  onClick={(e) => { e.stopPropagation(); handleStatusChange(trip.id, opt.status) }}
+                                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium ${opt.color} ${opt.hoverBg} transition-colors`}
+                                >
+                                  {opt.icon}
+                                  {opt.label}
+                                </button>
+                              ))}
+                              <div className={`border-t ${border} my-1`} />
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setDeleteId(trip.id) }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-red-400 ${dark ? 'hover:bg-red-900/20' : 'hover:bg-red-50'} transition-colors`}
+                              >
+                                <Trash2 size={13} /> Delete Trip
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     {/* Date range */}
-                    <div className={`flex items-center gap-1 mb-3`}>
+                    <div className="flex items-center gap-1 mb-3">
                       <Calendar size={11} className={tm} />
                       <p className={`text-[11px] ${tm}`}>{formatDate(trip.start_date)} → {formatDate(trip.end_date)}</p>
                     </div>
 
-                    {/* Budget progress */}
+                    {/* Budget progress — dim for cancelled */}
                     <div className="mb-3">
                       <div className="flex justify-between text-xs mb-1.5">
                         <span className={tm}>Budget used</span>
-                        <span className={`font-semibold ${alertStyle.text}`}>{trip.percentage_used}%</span>
+                        <span className={`font-semibold ${trip.status === 'cancelled' ? tm : alertStyle.text}`}>{trip.percentage_used}%</span>
                       </div>
                       <div className={`h-2 ${dark ? 'bg-[#2a2a2a]' : 'bg-gray-100'} rounded-full overflow-hidden`}>
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${alertStyle.bar}`}
+                          className={`h-full rounded-full transition-all duration-500 ${trip.status === 'cancelled' ? 'bg-gray-500' : alertStyle.bar}`}
                           style={{ width: `${Math.min(trip.percentage_used, 100)}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* Alert banner */}
-                    {trip.alert_level && (
+                    {/* Alert banner — only for active trips */}
+                    {trip.alert_level && trip.status === 'active' && (
                       <div className={`text-xs px-3 py-2 rounded-xl mb-3 border ${alertStyle.banner} ${alertStyle.text} flex items-center gap-2`}>
                         <AlertTriangle size={12} />
                         {trip.alert_level === 'exceeded' ? 'Budget exceeded!' : `${trip.alert_level}% of budget used`}
@@ -421,7 +529,7 @@ export default function Trips() {
                     <div className="grid grid-cols-2 gap-2 mb-4">
                       <div className={`${dark ? 'bg-[#111]' : 'bg-gray-50'} rounded-xl px-3 py-2`}>
                         <p className={`text-[10px] ${tm} mb-0.5`}>Spent</p>
-                        <p className={`text-sm font-bold text-rose-400`}>{formatINR(trip.total_spent)}</p>
+                        <p className="text-sm font-bold text-rose-400">{formatINR(trip.total_spent)}</p>
                       </div>
                       <div className={`${dark ? 'bg-[#111]' : 'bg-gray-50'} rounded-xl px-3 py-2`}>
                         <p className={`text-[10px] ${tm} mb-0.5`}>Remaining</p>

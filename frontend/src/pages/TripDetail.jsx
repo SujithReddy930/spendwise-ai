@@ -6,6 +6,7 @@
  *   - Settlement history tracked locally per session
  *   - Split expenses, add/edit/delete expenses, members, analytics
  *   - Open Wallet button in top bar
+ *   - Mark trip as Completed / Cancelled / Active from top bar
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -14,6 +15,7 @@ import {
   ArrowLeft, Plus, Trash2, X, Download, FileText,
   RefreshCw, Edit2, Check, AlertTriangle, Users,
   Pencil, CheckCircle, Circle, Wallet, CreditCard,
+  CheckCircle2, XCircle, PlayCircle, ChevronDown,
 } from 'lucide-react'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -36,6 +38,51 @@ const CAT_ICONS = {
   Fuel: '⛽', Entertainment: '🎬', Other: '💳',
 }
 
+const STATUS_CONFIG = {
+  active: {
+    label: 'Active',
+    bg: 'bg-emerald-500/20',
+    text: 'text-emerald-400',
+    border: 'border-emerald-500/30',
+    icon: <PlayCircle size={11} />,
+  },
+  completed: {
+    label: 'Completed',
+    bg: 'bg-blue-500/20',
+    text: 'text-blue-400',
+    border: 'border-blue-500/30',
+    icon: <CheckCircle2 size={11} />,
+  },
+  cancelled: {
+    label: 'Cancelled',
+    bg: 'bg-gray-500/20',
+    text: 'text-gray-400',
+    border: 'border-gray-500/30',
+    icon: <XCircle size={11} />,
+  },
+}
+
+const STATUS_ACTIONS = [
+  {
+    status: 'active',
+    label: 'Mark as Active',
+    icon: <PlayCircle size={13} />,
+    color: 'text-emerald-400',
+  },
+  {
+    status: 'completed',
+    label: 'Mark as Completed',
+    icon: <CheckCircle2 size={13} />,
+    color: 'text-blue-400',
+  },
+  {
+    status: 'cancelled',
+    label: 'Mark as Cancelled',
+    icon: <XCircle size={13} />,
+    color: 'text-gray-400',
+  },
+]
+
 const formatINR  = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
 const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
 
@@ -54,6 +101,11 @@ export default function TripDetail() {
   const [activeTab,  setActiveTab]  = useState('expenses')
   const [history,    setHistory]    = useState([])
   const prevAlertRef = useRef(null)
+
+  // ── Status state ──
+  const [showStatusMenu,  setShowStatusMenu]  = useState(false)
+  const [updatingStatus,  setUpdatingStatus]  = useState(false)
+  const statusMenuRef = useRef(null)
 
   // ── Expense form state ──
   const [showAdd,   setShowAdd]   = useState(false)
@@ -78,11 +130,11 @@ export default function TripDetail() {
   const [savingBudget,   setSavingBudget]   = useState(false)
 
   // ── Settlement state ──
-  const [memberPayments,   setMemberPayments]   = useState({})
-  const [showPayModal,     setShowPayModal]      = useState(false)
-  const [payTarget,        setPayTarget]         = useState(null)
-  const [payAmount,        setPayAmount]         = useState('')
-  const [payNote,          setPayNote]           = useState('')
+  const [memberPayments, setMemberPayments] = useState({})
+  const [showPayModal,   setShowPayModal]   = useState(false)
+  const [payTarget,      setPayTarget]      = useState(null)
+  const [payAmount,      setPayAmount]      = useState('')
+  const [payNote,        setPayNote]        = useState('')
 
   // ── Theme helpers ──
   const bg      = dark ? 'bg-[#0d0d0d]'                    : 'bg-gray-50'
@@ -96,9 +148,21 @@ export default function TripDetail() {
   const modalBg = dark ? 'bg-[#1a1a1a] border-[#2a2a2a]'   : 'bg-white border-gray-200'
   const border  = dark ? 'border-[#2a2a2a]'                 : 'border-gray-200'
   const hov     = dark ? 'hover:bg-[#252525]'               : 'hover:bg-gray-50'
+  const menuBg  = dark ? 'bg-[#222] border-[#333]'          : 'bg-white border-gray-200'
   const tooltip = dark
     ? { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 11 }
     : { background: '#fff',    border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 11 }
+
+  // ── Close status menu on outside click ──
+  useEffect(() => {
+    const handler = (e) => {
+      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target)) {
+        setShowStatusMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // ── Fetch all data ──
   const fetchAll = useCallback(async () => {
@@ -148,6 +212,27 @@ export default function TripDetail() {
     setTimeout(() => setToast(null), 4000)
   }
 
+  // ── Update trip status ──
+  const handleStatusChange = async (newStatus) => {
+    setShowStatusMenu(false)
+    if (newStatus === trip?.status) return
+    setUpdatingStatus(true)
+    try {
+      await api.patch(`/trips/${id}/status`, { status: newStatus })
+      setTrip(prev => ({ ...prev, status: newStatus }))
+      const labels = {
+        completed: '✅ Trip marked as completed',
+        cancelled: '🚫 Trip cancelled',
+        active:    '▶️ Trip reactivated',
+      }
+      showToast(labels[newStatus] || 'Status updated')
+    } catch (err) {
+      showToast(err?.response?.data?.detail || 'Failed to update status', 'error')
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
   // ── Edit Budget ──
   const handleEditBudget = () => {
     setNewBudget(String(trip?.budget_limit || ''))
@@ -177,10 +262,9 @@ export default function TripDetail() {
     memberPayments[memberId] || { paid: 0, fullySettled: false, payments: [] }
 
   const getAmountOwed = (s) => s.net < 0 ? Math.abs(s.net) : 0
-
-  const getRemaining = (s) => {
+  const getRemaining  = (s) => {
     const owed = getAmountOwed(s)
-    const mp = getMemberPayment(s.member_id)
+    const mp   = getMemberPayment(s.member_id)
     return Math.max(0, owed - mp.paid)
   }
 
@@ -193,13 +277,10 @@ export default function TripDetail() {
 
   const handleRecordPayment = () => {
     const amount = Number(payAmount)
-    if (!amount || amount <= 0) {
-      showToast('Enter a valid amount', 'error')
-      return
-    }
-    const mp = getMemberPayment(payTarget.member_id)
-    const owed = getAmountOwed(payTarget)
-    const newPaid = Math.min(mp.paid + amount, owed)
+    if (!amount || amount <= 0) { showToast('Enter a valid amount', 'error'); return }
+    const mp         = getMemberPayment(payTarget.member_id)
+    const owed       = getAmountOwed(payTarget)
+    const newPaid    = Math.min(mp.paid + amount, owed)
     const newPayments = [...mp.payments, {
       amount,
       note: payNote || null,
@@ -215,8 +296,8 @@ export default function TripDetail() {
   }
 
   const handleMarkFullySettled = (s) => {
-    const owed = getAmountOwed(s)
-    const mp = getMemberPayment(s.member_id)
+    const owed      = getAmountOwed(s)
+    const mp        = getMemberPayment(s.member_id)
     const remaining = getRemaining(s)
     if (remaining <= 0) {
       setMemberPayments(prev => ({ ...prev, [s.member_id]: { ...mp, fullySettled: false } }))
@@ -399,9 +480,11 @@ export default function TripDetail() {
     </div>
   )
 
-  const alertLevel = analytics?.alert?.level
-  const expenses   = trip?.expenses || []
-  const dailyData  = analytics?.daily_timeline?.map(d => ({ ...d, date: formatDate(d.date) })) || []
+  const alertLevel   = analytics?.alert?.level
+  const expenses     = trip?.expenses || []
+  const dailyData    = analytics?.daily_timeline?.map(d => ({ ...d, date: formatDate(d.date) })) || []
+  const tripStatus   = trip?.status || 'active'
+  const statusCfg    = STATUS_CONFIG[tripStatus] || STATUS_CONFIG.active
 
   return (
     <div className={`flex ${bg} min-h-screen ${tp}`}>
@@ -682,9 +765,47 @@ export default function TripDetail() {
             <ArrowLeft size={18} />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className={`text-base font-semibold ${tp} truncate`}>{trip?.name}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className={`text-base font-semibold ${tp} truncate`}>{trip?.name}</h1>
+              {/* ── Status badge + dropdown ── */}
+              <div className="relative" ref={statusMenuRef}>
+                <button
+                  onClick={() => setShowStatusMenu(v => !v)}
+                  disabled={updatingStatus}
+                  className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-all
+                    ${statusCfg.bg} ${statusCfg.text} ${statusCfg.border}
+                    hover:opacity-80 ${updatingStatus ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  title="Change trip status"
+                >
+                  {updatingStatus
+                    ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    : statusCfg.icon}
+                  {statusCfg.label}
+                  <ChevronDown size={9} className={`transition-transform ${showStatusMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Status dropdown */}
+                {showStatusMenu && (
+                  <div className={`absolute left-0 top-9 z-30 ${menuBg} border rounded-xl shadow-2xl overflow-hidden min-w-[175px]`}>
+                    <p className={`text-[10px] font-semibold ${tm} px-3 pt-2.5 pb-1 uppercase tracking-wide`}>Change Status</p>
+                    {STATUS_ACTIONS.filter(a => a.status !== tripStatus).map(opt => (
+                      <button
+                        key={opt.status}
+                        onClick={() => handleStatusChange(opt.status)}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium ${opt.color} ${hov} transition-colors`}
+                      >
+                        {opt.icon}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <p className={`text-xs ${tm}`}>{trip?.destination}</p>
           </div>
+
+          {/* Top bar actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <button onClick={() => navigate(`/trips/${id}/wallet`)}
               className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors">
@@ -708,8 +829,30 @@ export default function TripDetail() {
 
         <div className="p-4 md:p-6 space-y-5">
 
+          {/* ── Cancelled / Completed banner ── */}
+          {tripStatus === 'completed' && (
+            <div className="rounded-2xl p-4 border bg-blue-900/20 border-blue-800/40 flex items-center gap-3">
+              <CheckCircle2 size={16} className="text-blue-400 flex-shrink-0" />
+              <p className="text-sm font-semibold text-blue-400 flex-1">This trip is marked as completed.</p>
+              <button onClick={() => handleStatusChange('active')}
+                className="text-xs text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-lg hover:bg-blue-500/10 transition-colors">
+                Reactivate
+              </button>
+            </div>
+          )}
+          {tripStatus === 'cancelled' && (
+            <div className="rounded-2xl p-4 border bg-gray-800/30 border-gray-700/40 flex items-center gap-3">
+              <XCircle size={16} className="text-gray-400 flex-shrink-0" />
+              <p className="text-sm font-semibold text-gray-400 flex-1">This trip has been cancelled.</p>
+              <button onClick={() => handleStatusChange('active')}
+                className="text-xs text-gray-400 border border-gray-600/40 px-2.5 py-1 rounded-lg hover:bg-gray-500/10 transition-colors">
+                Reactivate
+              </button>
+            </div>
+          )}
+
           {/* ── Alert Banner ── */}
-          {alertLevel && !dismissed && (
+          {alertLevel && !dismissed && tripStatus === 'active' && (
             <div className={`rounded-2xl p-4 border flex items-start gap-3 ${alertConfig[alertLevel]?.bg}`}>
               <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${alertConfig[alertLevel]?.text}`} />
               <p className={`text-sm font-semibold flex-1 ${alertConfig[alertLevel]?.text}`}>{analytics.alert.message}</p>
@@ -761,7 +904,9 @@ export default function TripDetail() {
             <div className={`h-3 ${dark ? 'bg-[#2a2a2a]' : 'bg-gray-100'} rounded-full overflow-hidden`}>
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
-                  alertLevel === 'exceeded' ? 'bg-red-500'
+                  tripStatus === 'cancelled' ? 'bg-gray-500'
+                  : tripStatus === 'completed' ? 'bg-blue-500'
+                  : alertLevel === 'exceeded' ? 'bg-red-500'
                   : alertLevel === '90' ? 'bg-orange-500'
                   : alertLevel === '80' ? 'bg-amber-500'
                   : 'bg-emerald-500'
@@ -915,9 +1060,9 @@ export default function TripDetail() {
                 ) : (
                   <div className="space-y-3">
                     {settlement.map(s => {
-                      const owed       = getAmountOwed(s)
-                      const mp         = getMemberPayment(s.member_id)
-                      const remaining  = getRemaining(s)
+                      const owed      = getAmountOwed(s)
+                      const mp        = getMemberPayment(s.member_id)
+                      const remaining = getRemaining(s)
                       const isReceiver = s.net >= 0
                       const isSettled  = isReceiver || remaining <= 0
                       return (
@@ -1141,7 +1286,7 @@ export default function TripDetail() {
                         </div>
                         <p className={`text-xs ${tm} mt-0.5 capitalize`}>{h.action}</p>
                         {h.action === 'updated' && (
-                          <div className={`text-xs space-y-0.5 mt-1`}>
+                          <div className="text-xs space-y-0.5 mt-1">
                             {h.old_amount !== h.new_amount && h.old_amount != null && (
                               <p>Amount: <span className="line-through text-red-400">{formatINR(h.old_amount)}</span> → <span className="text-emerald-400 font-medium">{formatINR(h.new_amount)}</span></p>
                             )}
@@ -1154,7 +1299,7 @@ export default function TripDetail() {
                           </div>
                         )}
                         {h.action === 'deleted' && (
-                          <p className={`text-xs mt-1`}>
+                          <p className="text-xs mt-1">
                             <span className="text-red-400 font-medium">{formatINR(h.old_amount)}</span>
                             {h.old_category ? <span className={tm}> · {h.old_category}</span> : null}
                           </p>
