@@ -3,9 +3,9 @@ Trip Expense Routes - complete with history logging on add/update/delete.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 from pydantic import BaseModel
 
@@ -33,6 +33,10 @@ CATEGORY_COLORS = {
 
 class BudgetUpdate(BaseModel):
     budget_limit: float
+
+# Added Step 1: StatusUpdate Pydantic model
+class StatusUpdate(BaseModel):
+    status: str  # "active" | "completed" | "cancelled"
 
 class MemberCreate(BaseModel):
     name: str
@@ -69,7 +73,7 @@ def get_current_user_id(authorization: str = Header(...)) -> int:
 
 
 def get_trip_or_404(trip_id: int, user_id: int, db: Session) -> Trip:
-    trip = db.query(Trip).filter(
+    trip = db.query(Trip).options(joinedload(Trip.expenses)).filter(
         Trip.id == trip_id,
         Trip.user_id == user_id
     ).first()
@@ -142,7 +146,7 @@ def create_trip(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    trip = Trip(user_id=user_id, **data.dict())
+    trip = Trip(user_id=user_id, **data.model_dump())
     db.add(trip)
     db.commit()
     db.refresh(trip)
@@ -161,7 +165,9 @@ def get_all_trips_summary(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    trips = db.query(Trip).filter(Trip.user_id == user_id).order_by(Trip.created_at.desc()).all()
+    trips = db.query(Trip).options(joinedload(Trip.expenses)).filter(
+        Trip.user_id == user_id
+    ).order_by(Trip.created_at.desc()).all()
     result = []
     for trip in trips:
         total_spent = sum(e.amount for e in trip.expenses)
@@ -210,8 +216,9 @@ def update_trip(
     user_id: int = Depends(get_current_user_id),
 ):
     trip = get_trip_or_404(trip_id, user_id, db)
-    for k, v in data.dict(exclude_unset=True).items():
-        setattr(trip, k, v)
+    for k, v in data.model_dump(exclude_unset=True).items():
+        if hasattr(trip, k):
+            setattr(trip, k, v)
     db.commit()
     db.refresh(trip)
     return {"message": "Trip updated", "id": trip.id, "budget_limit": trip.budget_limit}
@@ -236,6 +243,23 @@ def update_budget(
     return {"message": "Budget updated", "budget_limit": trip.budget_limit}
 
 
+# Added Step 2: PATCH status endpoint
+@router.patch("/{trip_id}/status")
+def update_trip_status(
+    trip_id: int,
+    payload: StatusUpdate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    if payload.status not in ("active", "completed", "cancelled"):
+        raise HTTPException(status_code=400, detail="Invalid status value")
+    trip = get_trip_or_404(trip_id, user_id, db)
+    trip.status = payload.status
+    db.commit()
+    db.refresh(trip)
+    return {"message": "Status updated", "status": trip.status}
+
+
 @router.delete("/{trip_id}", status_code=204)
 def delete_trip(
     trip_id: int,
@@ -257,7 +281,7 @@ def add_expense(
     user_id: int = Depends(get_current_user_id),
 ):
     trip = get_trip_or_404(trip_id, user_id, db)
-    expense = TripExpense(trip_id=trip.id, user_id=user_id, **data.dict())
+    expense = TripExpense(trip_id=trip.id, user_id=user_id, **data.model_dump())
     db.add(expense)
     db.commit()
     db.refresh(expense)
@@ -312,8 +336,9 @@ def update_expense(
     old_notes = exp.notes
     title = exp.title
 
-    for k, v in data.dict(exclude_unset=True).items():
-        setattr(exp, k, v)
+    for k, v in data.model_dump(exclude_unset=True).items():
+        if hasattr(exp, k):
+            setattr(exp, k, v)
     db.commit()
     db.refresh(exp)
 
@@ -523,7 +548,7 @@ def get_trip_analytics(
     check_and_update_alerts(trip, pct, db)
     alert = build_alert(pct)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     days_total = max((trip.end_date - trip.start_date).days, 1)
     days_elapsed = max(min((now - trip.start_date).days + 1, days_total), 1)
     daily_avg = total_spent / days_elapsed if days_elapsed > 0 else 0

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -22,7 +22,10 @@ class Trip(Base):
     budget_limit = Column(Float, nullable=False)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
-    status = Column(String(20), default="active")
+    
+    # IMPROVEMENT: Enforce the explicit Enum at the DB level, fall back safely to native string conversion
+    status = Column(Enum(TripStatus), default=TripStatus.ACTIVE, nullable=False)
+    
     alert_80_sent = Column(Boolean, default=False)
     alert_90_sent = Column(Boolean, default=False)
     alert_exceeded_sent = Column(Boolean, default=False)
@@ -31,7 +34,7 @@ class Trip(Base):
 
     expenses = relationship("TripExpense", back_populates="trip", cascade="all, delete-orphan")
     members = relationship("TripMember", back_populates="trip", cascade="all, delete-orphan")
-    wallet = relationship("TripWallet", back_populates="trip", uselist=False, cascade="all, delete-orphan")  # ← NEW
+    wallet = relationship("TripWallet", back_populates="trip", uselist=False, cascade="all, delete-orphan")
 
 
 class TripExpense(Base):
@@ -63,7 +66,7 @@ class TripMember(Base):
 
     trip = relationship("Trip", back_populates="members")
     splits = relationship("ExpenseSplit", back_populates="member", cascade="all, delete-orphan")
-    deposits = relationship("WalletDeposit", back_populates="member", cascade="all, delete-orphan")  # ← NEW
+    deposits = relationship("WalletDeposit", back_populates="member", cascade="all, delete-orphan")
 
 
 class ExpenseSplit(Base):
@@ -78,6 +81,7 @@ class ExpenseSplit(Base):
 
     member = relationship("TripMember", back_populates="splits")
     expense = relationship("TripExpense", back_populates="splits")
+
 
 class TripExpenseHistory(Base):
     __tablename__ = "trip_expense_history"
@@ -96,3 +100,30 @@ class TripExpenseHistory(Base):
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     trip = relationship("Trip", backref="expense_history")
+
+
+# --- NEW WALLET MODEL SKELETONS (Resolves relationship mapper dependencies) ---
+
+class TripWallet(Base):
+    __tablename__ = "trip_wallets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    trip_id = Column(Integer, ForeignKey("trips.id"), nullable=False, unique=True, index=True)
+    balance = Column(Float, default=0.0, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    trip = relationship("Trip", back_populates="wallet")
+    deposits = relationship("WalletDeposit", back_populates="wallet", cascade="all, delete-orphan")
+
+
+class WalletDeposit(Base):
+    __tablename__ = "wallet_deposits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    wallet_id = Column(Integer, ForeignKey("trip_wallets.id"), nullable=False, index=True)
+    member_id = Column(Integer, ForeignKey("trip_members.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    wallet = relationship("TripWallet", back_populates="deposits")
+    member = relationship("TripMember", back_populates="deposits")
