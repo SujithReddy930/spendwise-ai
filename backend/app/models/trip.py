@@ -1,14 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import enum
 from app.database import Base
-
-
-class TripStatus(str, enum.Enum):
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
 
 
 class Trip(Base):
@@ -23,8 +16,8 @@ class Trip(Base):
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
     
-    # IMPROVEMENT: Enforce the explicit Enum at the DB level, fall back safely to native string conversion
-    status = Column(Enum(TripStatus), default=TripStatus.ACTIVE, nullable=False)
+    # FIXED: Reverted to standard String type to safely match production VARCHAR schema
+    status = Column(String, default="active", nullable=False)
     
     alert_80_sent = Column(Boolean, default=False)
     alert_90_sent = Column(Boolean, default=False)
@@ -102,5 +95,28 @@ class TripExpenseHistory(Base):
     trip = relationship("Trip", backref="expense_history")
 
 
-# --- NEW WALLET MODEL SKELETONS (Resolves relationship mapper dependencies) ---
+# --- WALLET MODEL SKELETONS ---
 
+class TripWallet(Base):
+    __tablename__ = "trip_wallets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    trip_id = Column(Integer, ForeignKey("trips.id"), nullable=False, unique=True, index=True)
+    balance = Column(Float, default=0.0, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    trip = relationship("Trip", back_populates="wallet")
+    deposits = relationship("WalletDeposit", back_populates="wallet", cascade="all, delete-orphan")
+
+
+class WalletDeposit(Base):
+    __tablename__ = "wallet_deposits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    wallet_id = Column(Integer, ForeignKey("trip_wallets.id"), nullable=False, index=True)
+    member_id = Column(Integer, ForeignKey("trip_members.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    wallet = relationship("TripWallet", back_populates="deposits")
+    member = relationship("TripMember", back_populates="deposits")
