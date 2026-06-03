@@ -1,7 +1,8 @@
+# backend/app/routes/expenses.py
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from calendar import monthrange
 import smtplib
@@ -9,8 +10,9 @@ import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.models.expense import Expense
+from app.models.ai_models import BudgetLimit
 from app.schemas.expense import ExpenseCreate
 from app.core.security import decode_token
 
@@ -20,17 +22,7 @@ SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 
-# ── Database session ──────────────────────────────────────────────────────────
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-# ── Auth helper ───────────────────────────────────────────────────────────────
+# ── Auth helper ────────────────────────────────────────────────────────────────
 
 def get_current_user_id(authorization: Optional[str] = Header(None)) -> Optional[int]:
     if not authorization or not authorization.startswith("Bearer "):
@@ -45,7 +37,14 @@ def get_current_user_id(authorization: Optional[str] = Header(None)) -> Optional
         return None
 
 
-# ── Filter helper ─────────────────────────────────────────────────────────────
+def require_user_id(authorization: Optional[str] = Header(None)) -> int:
+    user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user_id
+
+
+# ── Filter helper ──────────────────────────────────────────────────────────────
 
 def _filter_by_month(expenses, month, year):
     result = []
@@ -59,7 +58,33 @@ def _filter_by_month(expenses, month, year):
     return result
 
 
-# ── Create expense ────────────────────────────────────────────────────────────
+# ── Schemas ────────────────────────────────────────────────────────────────────
+
+class ExpenseUpdate(BaseModel):
+    title: Optional[str] = None
+    amount: Optional[float] = None
+    category: Optional[str] = None
+    payment_method: Optional[str] = None
+    note: Optional[str] = None
+    is_recurring: Optional[bool] = None
+    date: Optional[str] = None
+
+
+class BudgetLimitCreate(BaseModel):
+    category: str
+    monthly_limit: float
+
+
+class BudgetLimitOut(BaseModel):
+    id: int
+    category: str
+    monthly_limit: float
+
+    class Config:
+        from_attributes = True
+
+
+# ── Create expense ─────────────────────────────────────────────────────────────
 
 @router.post("/")
 def create_expense(
@@ -91,7 +116,7 @@ def create_expense(
     return expense
 
 
-# ── Get expenses ──────────────────────────────────────────────────────────────
+# ── Get all expenses ───────────────────────────────────────────────────────────
 
 @router.get("/")
 def get_expenses(
@@ -109,7 +134,65 @@ def get_expenses(
     )
 
 
-# ── Delete expense ────────────────────────────────────────────────────────────
+# ── Get single expense ─────────────────────────────────────────────────────────
+
+@router.get("/{expense_id}")
+def get_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_user_id),
+):
+    expense = (
+        db.query(Expense)
+        .filter(Expense.id == expense_id, Expense.user_id == user_id)
+        .first()
+    )
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return expense
+
+
+# ── Update expense ─────────────────────────────────────────────────────────────
+
+@router.put("/{expense_id}")
+def update_expense(
+    expense_id: int,
+    data: ExpenseUpdate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_user_id),
+):
+    expense = (
+        db.query(Expense)
+        .filter(Expense.id == expense_id, Expense.user_id == user_id)
+        .first()
+    )
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    if data.title is not None:
+        expense.title = data.title
+    if data.amount is not None:
+        expense.amount = data.amount
+    if data.category is not None:
+        expense.category = data.category
+    if data.payment_method is not None:
+        expense.payment_method = data.payment_method
+    if data.note is not None:
+        expense.note = data.note
+    if data.is_recurring is not None:
+        expense.is_recurring = data.is_recurring
+    if data.date is not None:
+        try:
+            expense.date = datetime.strptime(data.date, "%Y-%m-%d")
+        except Exception:
+            pass
+
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+# ── Delete expense ─────────────────────────────────────────────────────────────
 
 @router.delete("/{expense_id}")
 def delete_expense(
@@ -130,7 +213,7 @@ def delete_expense(
     return {"message": "Expense deleted"}
 
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# ── Summary ────────────────────────────────────────────────────────────────────
 
 @router.get("/summary")
 def get_summary(
@@ -159,7 +242,7 @@ def get_summary(
     }
 
 
-# ── Insights ──────────────────────────────────────────────────────────────────
+# ── Insights ───────────────────────────────────────────────────────────────────
 
 @router.get("/insights")
 def get_insights(
@@ -180,7 +263,6 @@ def get_insights(
     if not month_expenses:
         return {"insights": ["Add expenses to see personalised AI insights."]}
 
-    # Category breakdown
     by_cat = {}
     for e in month_expenses:
         by_cat[e.category] = by_cat.get(e.category, 0) + e.amount
@@ -200,7 +282,7 @@ def get_insights(
     return {"insights": insights}
 
 
-# ── Prediction ────────────────────────────────────────────────────────────────
+# ── Prediction ─────────────────────────────────────────────────────────────────
 
 @router.get("/prediction")
 def get_prediction(
@@ -218,18 +300,15 @@ def get_prediction(
     month_expenses = _filter_by_month(all_expenses, month, year)
     total_spent = sum(e.amount for e in month_expenses)
 
-    # Date math
     today = datetime.utcnow()
     days_in_month = monthrange(year, month)[1]
     is_current_month = (month == today.month and year == today.year)
     days_elapsed = today.day if is_current_month else days_in_month
     days_remaining = days_in_month - days_elapsed
 
-    # Linear forecast from daily average
     daily_avg = total_spent / days_elapsed if days_elapsed > 0 else 0
     linear_forecast = round(daily_avg * days_in_month)
 
-    # Confidence based on how much of the month has passed
     data_pct = days_elapsed / days_in_month
     if data_pct >= 0.6:
         confidence = "high"
@@ -238,7 +317,6 @@ def get_prediction(
     else:
         confidence = "low"
 
-    # Blend with last month's total for a smarter estimate
     prev_month = month - 1 if month > 1 else 12
     prev_year = year if month > 1 else year - 1
     prev_expenses = _filter_by_month(all_expenses, prev_month, prev_year)
@@ -264,7 +342,64 @@ def get_prediction(
     }
 
 
-# ── Email report ──────────────────────────────────────────────────────────────
+# ── Budget Limits ──────────────────────────────────────────────────────────────
+
+@router.get("/budget", response_model=List[BudgetLimitOut])
+def get_budget_limits(
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_user_id),
+):
+    return db.query(BudgetLimit).filter(BudgetLimit.user_id == user_id).all()
+
+
+@router.post("/budget", response_model=BudgetLimitOut)
+def set_budget_limit(
+    data: BudgetLimitCreate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_user_id),
+):
+    existing = (
+        db.query(BudgetLimit)
+        .filter(BudgetLimit.user_id == user_id, BudgetLimit.category == data.category)
+        .first()
+    )
+    if existing:
+        existing.monthly_limit = data.monthly_limit
+        existing.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    limit = BudgetLimit(
+        user_id=user_id,
+        category=data.category,
+        monthly_limit=data.monthly_limit,
+    )
+    db.add(limit)
+    db.commit()
+    db.refresh(limit)
+    return limit
+
+
+@router.delete("/budget/{category}")
+def delete_budget_limit(
+    category: str,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_user_id),
+):
+    limit = (
+        db.query(BudgetLimit)
+        .filter(BudgetLimit.user_id == user_id, BudgetLimit.category == category)
+        .first()
+    )
+    if not limit:
+        raise HTTPException(status_code=404, detail="Budget limit not found")
+    db.delete(limit)
+    db.commit()
+    return {"message": f"Budget limit for {category} removed"}
+
+
+# ── Email report ───────────────────────────────────────────────────────────────
 
 class EmailReportRequest(BaseModel):
     email: EmailStr
