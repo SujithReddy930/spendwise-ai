@@ -27,6 +27,7 @@ class Trip(Base):
 
     expenses = relationship("TripExpense", back_populates="trip", cascade="all, delete-orphan")
     members = relationship("TripMember", back_populates="trip", cascade="all, delete-orphan")
+    wallet = relationship("TripWallet", back_populates="trip", uselist=False, cascade="all, delete-orphan")
 
 class TripExpense(Base):
     __tablename__ = "trip_expenses"
