@@ -20,7 +20,7 @@ router = APIRouter(prefix="/ai", tags=["AI"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash"
 
 # Add this endpoint to backend/app/routes/ai.py
 # Place it after the existing router = APIRouter(...) line and imports
@@ -48,7 +48,7 @@ Reply with ONLY a JSON object like: {{"category": "Food", "confidence": 92}}
 Confidence is 0-100. No explanation, no markdown."""
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt,
         )
         text = response.text.strip().replace("```json", "").replace("```", "").strip()
